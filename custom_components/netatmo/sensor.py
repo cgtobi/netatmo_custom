@@ -112,6 +112,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         """Find all entities."""
         await data_handler.register_data_class(data_class)
 
+        if not data_handler.data.get(data_class):
+            return []
+        
         all_module_infos = {}
 
         for station_id in data_handler.data.get(data_class).stations:
