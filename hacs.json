@@ -1,0 +1,5 @@
+{
+  "name": "Netatmo Component",
+  "render_readme": true,
+  "domains": ["camera", "climate", "light", "sensor"]
+}
