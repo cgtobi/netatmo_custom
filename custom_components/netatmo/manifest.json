@@ -2,9 +2,7 @@
   "domain": "netatmo",
   "name": "Netatmo",
   "documentation": "https://www.home-assistant.io/integrations/netatmo",
-  "requirements": [
-    "pyatmo==4.0.0"
-  ],
+  "requirements": [],
   "after_dependencies": [
     "cloud"
   ],
