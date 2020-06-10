@@ -8,3 +8,14 @@ set_schedule:
     home_name:
       description: Home name.
       example: MyHome
+
+set_persons_home:
+  description: Set a person as away from home
+  fields:
+    home_name:
+      description: The name of the house
+      example: Home
+    persons:
+      descriotion: A list of persons to set as at home
+      example: [john, jack]
+    
