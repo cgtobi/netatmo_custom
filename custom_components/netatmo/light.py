@@ -3,7 +3,7 @@ import logging
 
 from . import pyatmo
 
-from homeassistant.components.light import Light
+from homeassistant.components.light import LightEntity
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
 
@@ -23,9 +23,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    if not data_handler.webhook:
-        raise PlatformNotReady
-
     data_class = "CameraData"
 
     async def get_entities():
@@ -41,6 +38,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
             for camera in all_cameras:
                 if camera["type"] == "NOC":
+                    if not data_handler.webhook:
+                        raise PlatformNotReady
+
                     _LOGGER.debug(
                         "Adding camera light %s %s", camera["id"], camera["name"]
                     )
@@ -68,14 +68,14 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     return
 
 
-class NetatmoLight(Light, NetatmoBase):
+class NetatmoLight(LightEntity, NetatmoBase):
     """Representation of a Netatmo Presence camera light."""
 
     def __init__(
         self, data_handler, data_class, camera_id: str, camera_type: str, home_id: str
     ):
         """Initialize a Netatmo Presence camera light."""
-        Light.__init__(self)
+        LightEntity.__init__(self)
         NetatmoBase.__init__(self, data_handler)
 
         self._data_classes.append({"name": data_class})
