@@ -58,6 +58,19 @@ SCAN_INTERVAL = 60
 
 
 @dataclass
+class NetatmoDevice:
+    """Netatmo device class."""
+
+    data_handler: NetatmoDataHandler
+    home_id: str
+    device_id: str
+    device_name: str
+    model: str
+    state_class_name: str
+
+
+
+@dataclass
 class NetatmoDataClass:
     """Class for keeping track of Netatmo data class metadata."""
 
