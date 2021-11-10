@@ -1,10 +1,13 @@
+"""Support for Netatmo weather station devices (stations and modules)."""
+from __future__ import annotations
+
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from abc import ABC
+from collections import defaultdict
 
-from .auth import NetatmoOAuth2
-from .exceptions import NoDevice
-from .helpers import _BASE_URL, fix_id, today_stamps
+from .auth import AbstractAsyncAuth, NetatmoOAuth2
+from .helpers import _BASE_URL, extract_raw_data, today_stamps
 
 LOG = logging.getLogger(__name__)
 
@@ -12,60 +15,38 @@ _GETMEASURE_REQ = _BASE_URL + "api/getmeasure"
 _GETSTATIONDATA_REQ = _BASE_URL + "api/getstationsdata"
 
 
-class WeatherStationData:
-    """Class of Netatmo Weather Station devices (stations and modules)."""
+class AbstractWeatherStationData(ABC):
+    """Abstract class of Netatmo Weather Station devices."""
 
-    def __init__(self, auth: NetatmoOAuth2, url_req: str = None) -> None:
-        """Initialize self.
+    raw_data: dict = defaultdict(dict)
+    stations: dict = defaultdict(dict)
+    modules: dict = defaultdict(dict)
 
-        Arguments:
-            auth {NetatmoOAuth2} -- Authentication information with a valid access token
-
-        Raises:
-            NoDevice: No devices found.
-        """
-        self.url_req = url_req or _GETSTATIONDATA_REQ
-        self.auth = auth
-
-        resp = self.auth.post_request(url=self.url_req)
-
-        if resp is None or "body" not in resp:
-            raise NoDevice("No weather station data returned by Netatmo server")
-
-        try:
-            self.raw_data = fix_id(resp["body"].get("devices"))
-        except KeyError:
-            LOG.debug("No <body> in response %s", resp)
-            raise NoDevice("No weather station data returned by Netatmo server")
-
-        if not self.raw_data:
-            raise NoDevice("No weather station available")
-
+    def process(self) -> None:
+        """Process data from API."""
         self.stations = {d["_id"]: d for d in self.raw_data}
         self.modules = {}
 
         for item in self.raw_data:
+            # The station name is sometimes not contained in the backend data
+            if "station_name" not in item:
+                item["station_name"] = item.get("home_name", item["type"])
 
             if "modules" not in item:
                 item["modules"] = [item]
 
             for module in item["modules"]:
-                if "module_name" not in module:
-                    if module["type"] == "NHC":
-                        module["module_name"] = module["station_name"]
-
-                    else:
-                        continue
+                if "module_name" not in module and module["type"] == "NHC":
+                    module["module_name"] = module["station_name"]
 
                 self.modules[module["_id"]] = module
                 self.modules[module["_id"]]["main_device"] = item["_id"]
 
-    def get_module_names(self, station_id: str) -> List:
+    def get_module_names(self, station_id: str) -> list:
         """Return a list of all module names for a given station."""
         res = set()
-        station_data = self.get_station(station_id)
 
-        if not station_data:
+        if not (station_data := self.get_station(station_id)):
             return []
 
         res.add(station_data.get("module_name", station_data.get("type")))
@@ -75,45 +56,41 @@ class WeatherStationData:
 
         return list(res)
 
-    def get_modules(self, station_id: str) -> Dict:
+    def get_modules(self, station_id: str) -> dict:
         """Return a dict of modules per given station."""
-        station_data = self.get_station(station_id)
-
-        if not station_data:
+        if not (station_data := self.get_station(station_id)):
             return {}
 
         res = {}
         for station in [self.stations[station_data["_id"]]]:
+            station_type = station.get("type")
+            station_name = station.get("station_name", station_type)
             res[station["_id"]] = {
-                "station_name": station["station_name"],
-                "module_name": station.get("module_name", station.get("type")),
+                "station_name": station_name,
+                "module_name": station.get("module_name", station_type),
                 "id": station["_id"],
             }
 
             for module in station["modules"]:
                 res[module["_id"]] = {
-                    "station_name": module.get("station_name", station["station_name"]),
+                    "station_name": module.get("station_name", station_name),
                     "module_name": module.get("module_name", module.get("type")),
                     "id": module["_id"],
                 }
 
         return res
 
-    def get_station(self, station_id: str) -> Dict:
+    def get_station(self, station_id: str) -> dict:
         """Return station by id."""
         return self.stations.get(station_id, {})
 
-    def get_module(self, module_id: str) -> Dict:
+    def get_module(self, module_id: str) -> dict:
         """Return module by id."""
         return self.modules.get(module_id, {})
 
-    def get_monitored_conditions(self, module_id: str) -> List:
+    def get_monitored_conditions(self, module_id: str) -> list:
         """Return monitored conditions for given module."""
-        module = self.get_module(module_id)
-        if not module:
-            module = self.get_station(module_id)
-
-        if not module:
+        if not (module := (self.get_module(module_id) or self.get_station(module_id))):
             return []
 
         conditions = []
@@ -121,7 +98,7 @@ class WeatherStationData:
             if condition == "Wind":
                 # the Wind meter actually exposes the following conditions
                 conditions.extend(
-                    ["WindAngle", "WindStrength", "GustAngle", "GustStrength"]
+                    ["WindAngle", "WindStrength", "GustAngle", "GustStrength"],
                 )
 
             elif condition == "Rain":
@@ -138,8 +115,11 @@ class WeatherStationData:
             # assume all other modules have rf_status, battery_vp, and battery_percent
             conditions.extend(["rf_status", "battery_vp", "battery_percent"])
 
-        if module["type"] in ["NAMain", "NAModule1", "NAModule4", "NHC"]:
-            conditions.extend(["min_temp", "max_temp"])
+        if module["type"] in ["NAMain", "NAModule1", "NAModule4"]:
+            conditions.extend(["temp_trend"])
+
+        if module["type"] == "NAMain":
+            conditions.extend(["pressure_trend"])
 
         if module["type"] in [
             "NAMain",
@@ -153,15 +133,16 @@ class WeatherStationData:
 
         return conditions
 
-    def get_last_data(self, station_id: str, exclude: int = 0) -> Dict:
+    def get_last_data(self, station_id: str, exclude: int = 0) -> dict:
         """Return data for a given station and time frame."""
         key = "_id"
 
-        # Breaking change from Netatmo : dashboard_data no longer available if station lost
-        last_data: Dict = {}
-        station = self.get_station(station_id)
+        last_data: dict = {}
 
-        if not station or "dashboard_data" not in station:
+        if (
+            not (station := self.get_station(station_id))
+            or "dashboard_data" not in station
+        ):
             LOG.debug("No dashboard data for station %s", station_id)
             return last_data
 
@@ -172,8 +153,8 @@ class WeatherStationData:
         if key in station and data["time_utc"] > limit:
             last_data[station[key]] = data.copy()
             last_data[station[key]]["When"] = last_data[station[key]].pop("time_utc")
-            last_data[station[key]]["wifi_status"] = station["wifi_status"]
-            last_data[station[key]]["reachable"] = station["reachable"]
+            last_data[station[key]]["wifi_status"] = station.get("wifi_status")
+            last_data[station[key]]["reachable"] = station.get("reachable")
 
         for module in station["modules"]:
 
@@ -185,7 +166,8 @@ class WeatherStationData:
                 last_data[module[key]] = data.copy()
                 last_data[module[key]]["When"] = last_data[module[key]].pop("time_utc")
 
-                # For potential use, add battery and radio coverage information to module data if present
+                # For potential use, add battery and radio coverage information
+                # to module data if present
                 for i in (
                     "rf_status",
                     "battery_vp",
@@ -198,25 +180,41 @@ class WeatherStationData:
 
         return last_data
 
-    def check_not_updated(self, station_id: str, delay: int = 3600) -> List:
+    def check_not_updated(self, station_id: str, delay: int = 3600) -> list:
         """Check if a given station has not been updated."""
         res = self.get_last_data(station_id)
-        ret = []
-        for key, value in res.items():
-            if time.time() - value["When"] > delay:
-                ret.append(key)
+        return [
+            key for key, value in res.items() if time.time() - value["When"] > delay
+        ]
 
-        return ret
-
-    def check_updated(self, station_id: str, delay: int = 3600) -> List:
+    def check_updated(self, station_id: str, delay: int = 3600) -> list:
         """Check if a given station has been updated."""
         res = self.get_last_data(station_id)
-        ret = []
-        for key, value in res.items():
-            if time.time() - value["When"] < delay:
-                ret.append(key)
+        return [
+            key for key, value in res.items() if time.time() - value["When"] < delay
+        ]
 
-        return ret
+
+class WeatherStationData(AbstractWeatherStationData):
+    """Class of Netatmo weather station devices."""
+
+    def __init__(self, auth: NetatmoOAuth2, url_req: str = _GETSTATIONDATA_REQ) -> None:
+        """Initialize the Netatmo weather station data.
+
+        Arguments:
+            auth {NetatmoOAuth2} -- Authentication information with a valid access token
+            url_req {str} -- Optional request endpoint
+        """
+        self.auth = auth
+        self.url_req = url_req
+
+    def update(self):
+        """Fetch data from API."""
+        self.raw_data = extract_raw_data(
+            self.auth.post_request(url=self.url_req).json(),
+            "devices",
+        )
+        self.process()
 
     def get_data(
         self,
@@ -229,7 +227,7 @@ class WeatherStationData:
         limit: int = None,
         optimize: bool = False,
         real_time: bool = False,
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """Retrieve data from a device or module."""
         post_params = {"device_id": device_id}
         if module_id:
@@ -250,11 +248,14 @@ class WeatherStationData:
         post_params["optimize"] = "true" if optimize else "false"
         post_params["real_time"] = "true" if real_time else "false"
 
-        return self.auth.post_request(url=_GETMEASURE_REQ, params=post_params)
+        return self.auth.post_request(url=_GETMEASURE_REQ, params=post_params).json()
 
     def get_min_max_t_h(
-        self, station_id: str, module_id: str = None, frame: str = "last24"
-    ) -> Optional[Tuple[float, float, float, float]]:
+        self,
+        station_id: str,
+        module_id: str = None,
+        frame: str = "last24",
+    ) -> tuple[float, float, float, float] | None:
         """Return minimum and maximum temperature and humidity over the given timeframe.
 
         Arguments:
@@ -274,6 +275,9 @@ class WeatherStationData:
         elif frame == "day":
             start, end = today_stamps()
 
+        else:
+            raise ValueError("'frame' value can only be 'last24' or 'day'")
+
         resp = self.get_data(
             device_id=station_id,
             module_id=module_id,
@@ -289,3 +293,29 @@ class WeatherStationData:
             return min(temperature), max(temperature), min(humidity), max(humidity)
 
         return None
+
+
+class AsyncWeatherStationData(AbstractWeatherStationData):
+    """Class of Netatmo weather station devices."""
+
+    def __init__(
+        self,
+        auth: AbstractAsyncAuth,
+        url_req: str = _GETSTATIONDATA_REQ,
+    ) -> None:
+        """Initialize the Netatmo weather station data.
+
+        Arguments:
+            auth {AbstractAsyncAuth} -- Authentication information with a valid access token
+            url_req {str} -- Optional request endpoint
+        """
+        self.auth = auth
+        self.url_req = url_req
+
+    async def async_update(self):
+        """Fetch data from API."""
+        resp = await self.auth.async_post_request(url=self.url_req)
+
+        assert not isinstance(resp, bytes)
+        self.raw_data = extract_raw_data(await resp.json(), "devices")
+        self.process()

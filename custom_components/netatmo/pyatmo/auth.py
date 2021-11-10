@@ -1,11 +1,16 @@
+"""Support for Netatmo authentication."""
+from __future__ import annotations
+
 import logging
+from abc import ABC, abstractmethod
 from json import JSONDecodeError
 from time import sleep
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable
 
 import requests
-from oauthlib.oauth2 import LegacyApplicationClient, TokenExpiredError  # type: ignore
-from requests_oauthlib import OAuth2Session  # type: ignore
+from aiohttp import ClientError, ClientResponse, ClientSession
+from oauthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
+from requests_oauthlib import OAuth2Session
 
 from pyatmo.exceptions import ApiError
 from pyatmo.helpers import _BASE_URL, ERRORS
@@ -13,10 +18,14 @@ from pyatmo.helpers import _BASE_URL, ERRORS
 LOG = logging.getLogger(__name__)
 
 # Common definitions
-AUTH_REQ = _BASE_URL + "oauth2/token"
-AUTH_URL = _BASE_URL + "oauth2/authorize"
+AUTH_REQ_ENDPOINT = "oauth2/token"
+AUTH_REQ = _BASE_URL + AUTH_REQ_ENDPOINT
+AUTH_URL_ENDPOINT = "oauth2/authorize"
+AUTH_URL = _BASE_URL + AUTH_URL_ENDPOINT
 WEBHOOK_URL_ADD = _BASE_URL + "api/addwebhook"
 WEBHOOK_URL_DROP = _BASE_URL + "api/dropwebhook"
+
+AUTHORIZATION_HEADER = "Authorization"
 
 
 # Possible scops
@@ -44,10 +53,10 @@ class NetatmoOAuth2:
         self,
         client_id: str = None,
         client_secret: str = None,
-        redirect_uri: Optional[str] = None,
-        token: Optional[Dict[str, str]] = None,
-        token_updater: Optional[Callable[[str], None]] = None,
-        scope: Optional[str] = "read_station",
+        redirect_uri: str | None = None,
+        token: dict[str, str] | None = None,
+        token_updater: Callable[[str], None] | None = None,
+        scope: str | None = "read_station",
     ) -> None:
         """Initialize self.
 
@@ -91,7 +100,7 @@ class NetatmoOAuth2:
             scope=self.scope,
         )
 
-    def refresh_tokens(self) -> Dict[str, Union[str, int]]:
+    def refresh_tokens(self) -> dict[str, str | int]:
         """Refresh and return new tokens."""
         token = self._oauth.refresh_token(AUTH_REQ, **self.extra)
 
@@ -101,18 +110,18 @@ class NetatmoOAuth2:
         return token
 
     def post_request(
-        self, url: str, params: Optional[Dict] = None, timeout: int = 5,
-    ) -> Any:
+        self,
+        url: str,
+        params: dict | None = None,
+        timeout: int = 5,
+    ) -> requests.Response:
         """Wrapper for post requests."""
         resp = None
-        if not params:
-            params = {}
+        req_args = {"data": params if params is not None else {}}
 
-        if "json" in params:
-            json_params: Optional[str] = params.pop("json")
-
-        else:
-            json_params = None
+        if "json" in req_args["data"]:
+            req_args["json"] = req_args["data"]["json"]
+            req_args.pop("data")
 
         if "https://" not in url:
             try:
@@ -126,21 +135,13 @@ class NetatmoOAuth2:
 
         else:
 
-            def query(url: str, params: Dict, timeout: int, retries: int) -> Any:
+            def query(url: str, params: dict, timeout: int, retries: int) -> Any:
                 if retries == 0:
                     LOG.error("Too many retries")
-                    return
+                    return requests.Response()
 
                 try:
-                    if json_params:
-                        rsp = self._oauth.post(
-                            url=url, json=json_params, timeout=timeout
-                        )
-
-                    else:
-                        rsp = self._oauth.post(url=url, data=params, timeout=timeout)
-
-                    return rsp
+                    return self._oauth.post(url=url, timeout=timeout, **params)
 
                 except (
                     TokenExpiredError,
@@ -153,49 +154,54 @@ class NetatmoOAuth2:
                     sleep(1)
                     return query(url, params, timeout * 2, retries - 1)
 
-            resp = query(url, params, timeout, 3)
+            resp = query(url, req_args, timeout, 3)
 
         if resp is None:
             LOG.debug("Resp is None - %s", resp)
-            return None
+            return requests.Response()
 
         if not resp.ok:
-            LOG.debug("The Netatmo API returned %s", resp.status_code)
-            LOG.debug("Netato API error: %s", resp.content)
+            LOG.debug(
+                "The Netatmo API returned %s (%s)",
+                resp.content,
+                resp.status_code,
+            )
             try:
                 raise ApiError(
                     f"{resp.status_code} - "
                     f"{ERRORS.get(resp.status_code, '')} - "
                     f"{resp.json()['error']['message']} "
                     f"({resp.json()['error']['code']}) "
-                    f"when accessing '{url}'"
+                    f"when accessing '{url}'",
                 )
 
-            except JSONDecodeError:
+            except JSONDecodeError as exc:
                 raise ApiError(
                     f"{resp.status_code} - "
                     f"{ERRORS.get(resp.status_code, '')} - "
-                    f"when accessing '{url}'"
-                )
+                    f"when accessing '{url}'",
+                ) from exc
 
-        try:
-            if "application/json" in resp.headers.get("content-type", []):
-                return resp.json()
+        if (
+            "application/json"
+            in resp.headers.get(
+                "content-type",
+                [],
+            )
+            or resp.content not in [b"", b"None"]
+        ):
+            return resp
 
-            if resp.content not in [b"", b"None"]:
-                return resp.content
+        return requests.Response()
 
-        except (TypeError, AttributeError):
-            LOG.debug("Invalid response %s", resp)
-
-        return None
-
-    def get_authorization_url(self, state: Optional[str] = None) -> Tuple[str, str]:
+    def get_authorization_url(self, state: str | None = None) -> tuple:
         return self._oauth.authorization_url(AUTH_URL, state)
 
     def request_token(
-        self, authorization_response: Optional[str] = None, code: Optional[str] = None
-    ) -> Dict[str, str]:
+        self,
+        authorization_response: str | None = None,
+        code: str | None = None,
+    ) -> dict[str, str]:
         """
         Generic method for fetching a Netatmo access token.
         :param authorization_response: Authorization response URL, the callback
@@ -252,16 +258,133 @@ class ClientAuth(NetatmoOAuth2):
         password: str,
         scope="read_station",
     ):
-        # pylint: disable=super-init-not-called
-        self._client_id = client_id
-        self._client_secret = client_secret
+        super().__init__(client_id=client_id, client_secret=client_secret, scope=scope)
 
-        self._oauth = OAuth2Session(client=LegacyApplicationClient(client_id=client_id))
+        self._oauth = OAuth2Session(
+            client=LegacyApplicationClient(client_id=self.client_id),
+        )
         self._oauth.fetch_token(
             token_url=AUTH_REQ,
             username=username,
             password=password,
-            client_id=client_id,
-            client_secret=client_secret,
-            scope=scope,
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            scope=self.scope,
         )
+
+
+class AbstractAsyncAuth(ABC):
+    """Abstract class to make authenticated requests."""
+
+    def __init__(self, websession: ClientSession) -> None:
+        """Initialize the auth."""
+        self.websession = websession
+
+    @abstractmethod
+    async def async_get_access_token(self) -> str:
+        """Return a valid access token."""
+
+    async def async_get_image(
+        self,
+        url: str,
+        params: dict | None = None,
+        timeout: int = 5,
+    ) -> bytes:
+        """Wrapper for async get requests."""
+        try:
+            access_token = await self.async_get_access_token()
+        except ClientError as err:
+            raise ApiError(f"Access token failure: {err}") from err
+        headers = {AUTHORIZATION_HEADER: f"Bearer {access_token}"}
+
+        req_args = {"data": params if params is not None else {}}
+
+        async with self.websession.get(
+            url,
+            **req_args,
+            headers=headers,
+            timeout=timeout,
+        ) as resp:
+            resp_status = resp.status
+            resp_content = await resp.read()
+
+            if resp.headers.get("content-type") == "image/jpeg":
+                return resp_content
+
+        raise ApiError(
+            f"{resp_status} - "
+            f"invalid content-type in response"
+            f"when accessing '{url}'",
+        )
+
+    async def async_post_request(
+        self,
+        url: str,
+        params: dict | None = None,
+        timeout: int = 5,
+    ) -> ClientResponse:
+        """Wrapper for async post requests."""
+        try:
+            access_token = await self.async_get_access_token()
+        except ClientError as err:
+            raise ApiError(f"Access token failure: {err}") from err
+        headers = {AUTHORIZATION_HEADER: f"Bearer {access_token}"}
+
+        req_args = {"data": params if params is not None else {}}
+
+        if "json" in req_args["data"]:
+            req_args["json"] = req_args["data"]["json"]
+            req_args.pop("data")
+
+        async with self.websession.post(
+            url,
+            **req_args,
+            headers=headers,
+            timeout=timeout,
+        ) as resp:
+            resp_status = resp.status
+            resp_content = await resp.read()
+
+            if not resp.ok:
+                LOG.debug("The Netatmo API returned %s (%s)", resp_content, resp_status)
+                try:
+                    resp_json = await resp.json()
+                    raise ApiError(
+                        f"{resp_status} - "
+                        f"{ERRORS.get(resp_status, '')} - "
+                        f"{resp_json['error']['message']} "
+                        f"({resp_json['error']['code']}) "
+                        f"when accessing '{url}'",
+                    )
+
+                except JSONDecodeError as exc:
+                    raise ApiError(
+                        f"{resp_status} - "
+                        f"{ERRORS.get(resp_status, '')} - "
+                        f"when accessing '{url}'",
+                    ) from exc
+
+            try:
+                if "application/json" in resp.headers.get("content-type", []):
+                    return resp
+
+                if resp_content not in [b"", b"None"]:
+                    return resp
+
+            except (TypeError, AttributeError):
+                LOG.debug("Invalid response %s", resp)
+
+        return resp
+
+    async def async_addwebhook(self, webhook_url: str) -> None:
+        """Register webhook."""
+        resp = await self.async_post_request(WEBHOOK_URL_ADD, {"url": webhook_url})
+        LOG.debug("addwebhook: %s", resp)
+
+    async def async_dropwebhook(self) -> None:
+        """Unregister webhook."""
+        resp = await self.async_post_request(
+            WEBHOOK_URL_DROP,
+            {"app_types": "app_security"},
+        )
+        LOG.debug("dropwebhook: %s", resp)
