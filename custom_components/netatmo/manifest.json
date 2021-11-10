@@ -3,10 +3,10 @@
   "name": "Netatmo",
   "documentation": "https://www.home-assistant.io/integrations/netatmo",
   "requirements": [
-    
   ],
   "after_dependencies": [
-    "cloud"
+    "cloud",
+    "media_source"
   ],
   "dependencies": [
     "webhook"
@@ -22,5 +22,6 @@
       "Presence",
       "Welcome"
     ]
-  }
+  },
+  "iot_class": "cloud_polling"
 }
