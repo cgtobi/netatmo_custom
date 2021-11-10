@@ -1,90 +1,97 @@
 """Base class for Netatmo entities."""
-import logging
-from typing import Dict, List
+from __future__ import annotations
 
+from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.core import callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.entity_registry import async_entries_for_device
+from homeassistant.helpers.entity import DeviceInfo, Entity
 
-from .data_handler import NetatmoDataHandler
-
-_LOGGER = logging.getLogger(__name__)
+from .const import (
+    DATA_DEVICE_IDS,
+    DEFAULT_ATTRIBUTION,
+    DOMAIN,
+    MANUFACTURER,
+    MODELS,
+    SIGNAL_NAME,
+)
+from .data_handler import PUBLICDATA_DATA_CLASS_NAME, NetatmoDataHandler
 
 
 class NetatmoBase(Entity):
     """Netatmo entity base class."""
 
-    DOMAIN = ""
-    TYPE = ""
-
     def __init__(self, data_handler: NetatmoDataHandler) -> None:
         """Set up Netatmo entity base."""
         self.data_handler = data_handler
-        self._data_classes: List[Dict] = []
+        self._data_classes: list[dict] = []
+
+        self._device_name: str = ""
+        self._id: str = ""
+        self._model: str = ""
+        self._netatmo_type: str = ""
+        self._attr_name = None
+        self._attr_unique_id = None
+        self._attr_extra_state_attributes = {ATTR_ATTRIBUTION: DEFAULT_ATTRIBUTION}
 
     async def async_added_to_hass(self) -> None:
         """Entity created."""
-        _LOGGER.debug("New client %s", self.entity_id)
         for data_class in self._data_classes:
+            signal_name = data_class[SIGNAL_NAME]
+
             if "home_id" in data_class:
                 await self.data_handler.register_data_class(
-                    data_class["name"], home_id=data_class["home_id"]
-                )
-                signal_name = f"{data_class['name']}-{data_class['home_id']}"
-            else:
-                await self.data_handler.register_data_class(data_class["name"])
-                signal_name = f"{data_class['name']}"
-
-            self.data_handler.listeners.append(
-                async_dispatcher_connect(
-                    self.hass,
-                    f"netatmo-update-{signal_name}",
+                    data_class["name"],
+                    signal_name,
                     self.async_update_callback,
+                    home_id=data_class["home_id"],
                 )
-            )
+
+            elif data_class["name"] == PUBLICDATA_DATA_CLASS_NAME:
+                await self.data_handler.register_data_class(
+                    data_class["name"],
+                    signal_name,
+                    self.async_update_callback,
+                    lat_ne=data_class["lat_ne"],
+                    lon_ne=data_class["lon_ne"],
+                    lat_sw=data_class["lat_sw"],
+                    lon_sw=data_class["lon_sw"],
+                )
+
+            else:
+                await self.data_handler.register_data_class(
+                    data_class["name"], signal_name, self.async_update_callback
+                )
+
+            for sub in self.data_handler.data_classes[signal_name].subscriptions:
+                if sub is None:
+                    await self.data_handler.unregister_data_class(signal_name, None)
+
+        registry = await self.hass.helpers.device_registry.async_get_registry()
+        device = registry.async_get_device({(DOMAIN, self._id)}, set())
+        self.hass.data[DOMAIN][DATA_DEVICE_IDS][self._id] = device.id
+
         self.async_update_callback()
 
-    async def async_remove(self):
-        """Clean up when removing entity.
+    async def async_will_remove_from_hass(self) -> None:
+        """Run when entity will be removed from hass."""
+        await super().async_will_remove_from_hass()
 
-        Remove entity if no entry in entity registry exist.
-        Remove entity registry entry if no entry in device registry exist.
-        Remove device registry entry if there is only one linked entity (this entity).
-        Remove entity registry entry if there are more than one entity linked to the
-        device registry entry.
-        """
-        entity_registry = await self.hass.helpers.entity_registry.async_get_registry()
-        entity_entry = entity_registry.async_get(self.entity_id)
-        if not entity_entry:
-            await super().async_remove()
-            return
-
-        device_registry = await self.hass.helpers.device_registry.async_get_registry()
-        device_entry = device_registry.async_get(entity_entry.device_id)
-        if not device_entry:
-            entity_registry.async_remove(self.entity_id)
-            return
-
-        if len(async_entries_for_device(entity_registry, entity_entry.device_id)) == 1:
-            device_registry.async_remove_device(device_entry.id)
-            return
-
-        entity_registry.async_remove(self.entity_id)
+        for data_class in self._data_classes:
+            await self.data_handler.unregister_data_class(
+                data_class[SIGNAL_NAME], self.async_update_callback
+            )
 
     @callback
-    def async_update_callback(self):
+    def async_update_callback(self) -> None:
         """Update the entity's state."""
         raise NotImplementedError
 
-    async def options_updated(self) -> None:
-        """Config entry options are updated, remove entity if option is disabled."""
-        raise NotImplementedError
-
-    async def remove_item(self, mac_addresses: set) -> None:
-        """Remove entity if MAC is part of set."""
-        raise NotImplementedError
-
     @property
-    def _data(self):
-        return self.data_handler.data[self._data_classes[0]["name"]]
+    def device_info(self) -> DeviceInfo:
+        """Return the device info for the sensor."""
+        return DeviceInfo(
+            configuration_url=f"https://my.netatmo.com/app/{self._netatmo_type}",
+            identifiers={(DOMAIN, self._id)},
+            name=self._device_name,
+            manufacturer=MANUFACTURER,
+            model=MODELS[self._model],
+        )

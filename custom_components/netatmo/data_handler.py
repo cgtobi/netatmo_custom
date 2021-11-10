@@ -1,171 +1,207 @@
 """The Netatmo data handler."""
+from __future__ import annotations
+
 import asyncio
+from collections import deque
+from dataclasses import dataclass
 from datetime import timedelta
-from functools import partial
+from itertools import islice
 import logging
 from time import time
-from typing import Dict, List
+from typing import Any
 
 from . import pyatmo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import AUTH, DOMAIN, MANUFACTURER
+from .const import (
+    AUTH,
+    DOMAIN,
+    MANUFACTURER,
+    WEBHOOK_ACTIVATION,
+    WEBHOOK_DEACTIVATION,
+    WEBHOOK_NACAMERA_CONNECTION,
+    WEBHOOK_PUSH_TYPE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
+CAMERA_DATA_CLASS_NAME = "AsyncCameraData"
+WEATHERSTATION_DATA_CLASS_NAME = "AsyncWeatherStationData"
+HOMECOACH_DATA_CLASS_NAME = "AsyncHomeCoachData"
+CLIMATE_TOPOLOGY_CLASS_NAME = "AsyncClimateTopology"
+CLIMATE_STATE_CLASS_NAME = "AsyncClimate"
+PUBLICDATA_DATA_CLASS_NAME = "AsyncPublicData"
 
 DATA_CLASSES = {
-    "WeatherStationData": pyatmo.WeatherStationData,
-    "HomeCoachData": pyatmo.HomeCoachData,
-    "CameraData": pyatmo.CameraData,
-    "HomeData": pyatmo.HomeData,
-    "HomeStatus": pyatmo.HomeStatus,
+    WEATHERSTATION_DATA_CLASS_NAME: pyatmo.AsyncWeatherStationData,
+    HOMECOACH_DATA_CLASS_NAME: pyatmo.AsyncHomeCoachData,
+    CAMERA_DATA_CLASS_NAME: pyatmo.AsyncCameraData,
+    CLIMATE_TOPOLOGY_CLASS_NAME: pyatmo.AsyncClimateTopology,
+    CLIMATE_STATE_CLASS_NAME: pyatmo.AsyncClimate,
+    PUBLICDATA_DATA_CLASS_NAME: pyatmo.AsyncPublicData,
 }
 
-MAX_CALLS_1H = 20
-PARALLEL_CALLS = 3
+BATCH_SIZE = 3
 DEFAULT_INTERVALS = {
-    "HomeData": 900,
-    "HomeStatus": 300,
-    "CameraData": 900,
-    "WeatherStationData": 300,
-    "HomeCoachData": 300,
-    "PublicData": 300,
+    CLIMATE_TOPOLOGY_CLASS_NAME: 3600,
+    CLIMATE_STATE_CLASS_NAME: 300,
+    CAMERA_DATA_CLASS_NAME: 900,
+    WEATHERSTATION_DATA_CLASS_NAME: 600,
+    HOMECOACH_DATA_CLASS_NAME: 300,
+    PUBLICDATA_DATA_CLASS_NAME: 600,
 }
 SCAN_INTERVAL = 60
+
+
+@dataclass
+class NetatmoDataClass:
+    """Class for keeping track of Netatmo data class metadata."""
+
+    name: str
+    interval: int
+    next_scan: float
+    subscriptions: list[CALLBACK_TYPE]
 
 
 class NetatmoDataHandler:
     """Manages the Netatmo data handling."""
 
-    # Central class to manage the polling data from the Netatmo API
-    # as well as the push data from the webhook
-    #
-    # Create one instance of the handler and store it in hass.data
-    #
-    # Register entities of its platforms when added to HA
-    # to receive signals once new data is available
-    #
-    # Fetch data for all data classes for the first time
-    # to gather all available entities
-    # then only update periodically the registered data classes and
-    # dispatch signals for the registered entities to fetch the new data
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize self."""
         self.hass = hass
-        self._auth = hass.data[DOMAIN][entry.entry_id][AUTH]
-        self.listeners: List[CALLBACK_TYPE] = []
-        self._data_classes: Dict = {}
-        self.data = {}
-        self._queue: List = []
+        self.config_entry = config_entry
+        self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
+        self.data_classes: dict = {}
+        self.data: dict = {}
+        self._queue: deque = deque()
         self._webhook: bool = False
 
-        self.lock = asyncio.Lock()
-
-    async def async_setup(self):
+    async def async_setup(self) -> None:
         """Set up the Netatmo data handler."""
 
-        async def async_update(event_time):
-            """Update device."""
-            queue = [entry for entry in self._queue[0:PARALLEL_CALLS]]
-            for _ in queue:
-                self._queue.append(self._queue.pop(0))
-
-            for data_class in queue:
-                if data_class["next_scan"] > time():
-                    continue
-                self._data_classes[data_class["name"]]["next_scan"] = (
-                    time() + data_class["interval"]
-                )
-                try:
-                    self.data[
-                        data_class["name"]
-                    ] = await self.hass.async_add_executor_job(
-                        partial(data_class["class"], **data_class["kwargs"],),
-                        self._auth,
-                    )
-                    async_dispatcher_send(
-                        self.hass, f"netatmo-update-{data_class['name']}"
-                    )
-                except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                    _LOGGER.debug(err)
-
         async_track_time_interval(
-            self.hass, async_update, timedelta(seconds=SCAN_INTERVAL)
+            self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
         )
 
-        async def handle_event(event):
-            """Handle webhook events."""
-            if event.data["data"]["push_type"] == "webhook_activation":
-                _LOGGER.info("%s webhook successfully registered", MANUFACTURER)
-                self._webhook = True
+        self.config_entry.async_on_unload(
+            async_dispatcher_connect(
+                self.hass,
+                f"signal-{DOMAIN}-webhook-None",
+                self.handle_event,
+            )
+        )
 
-        self.hass.bus.async_listen("netatmo_event", handle_event)
+    async def async_update(self, event_time: timedelta) -> None:
+        """
+        Update device.
 
-    async def register_data_class(self, data_class_name, **kwargs):
-        """Register data class."""
-        if "home_id" in kwargs:
-            data_class_entry = f"{data_class_name}-{kwargs['home_id']}"
-        else:
-            data_class_entry = data_class_name
+        We do up to BATCH_SIZE calls in one update in order
+        to minimize the calls on the api service.
+        """
+        for data_class in islice(self._queue, 0, BATCH_SIZE):
+            if data_class.next_scan > time():
+                continue
 
-        async with self.lock:
-            if data_class_entry not in self._data_classes:
-                self._data_classes[data_class_entry] = {
-                    "class": DATA_CLASSES[data_class_name],
-                    "name": data_class_entry,
-                    "interval": DEFAULT_INTERVALS[data_class_name],
-                    "next_scan": time() + DEFAULT_INTERVALS[data_class_name],
-                    "kwargs": kwargs,
-                    "registered": 1,
-                }
-
-                try:
-                    self.data[
-                        data_class_entry
-                    ] = await self.hass.async_add_executor_job(
-                        partial(DATA_CLASSES[data_class_name], **kwargs,), self._auth,
-                    )
-                except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                    _LOGGER.debug(err)
-
-                self._queue.append(self._data_classes[data_class_entry])
-                _LOGGER.debug("Data class %s added", data_class_name)
-
-            else:
-                self._data_classes[data_class_entry].update(
-                    registered=self._data_classes[data_class_entry]["registered"] + 1
+            if data_class_name := data_class.name:
+                self.data_classes[data_class_name].next_scan = (
+                    time() + data_class.interval
                 )
 
-    async def unregister_data_class(self, data_class_entry):
-        """Unregister data class."""
-        async with self.lock:
-            registered = self._data_classes[data_class_entry]["registered"]
+                await self.async_fetch_data(data_class_name)
 
-            if registered > 1:
-                self._data_classes[data_class_entry].update(registered=registered - 1)
-            else:
-                self._queue.remove(self._data_classes[data_class_entry])
-                self._data_classes.pop(data_class_entry)
-                _LOGGER.debug("Data class %s removed", data_class_entry)
+        self._queue.rotate(BATCH_SIZE)
+
+    @callback
+    def async_force_update(self, data_class_entry: str) -> None:
+        """Prioritize data retrieval for given data class entry."""
+        self.data_classes[data_class_entry].next_scan = time()
+        self._queue.rotate(-(self._queue.index(self.data_classes[data_class_entry])))
+
+    async def handle_event(self, event: dict) -> None:
+        """Handle webhook events."""
+        if event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_ACTIVATION:
+            _LOGGER.info("%s webhook successfully registered", MANUFACTURER)
+            self._webhook = True
+
+        elif event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_DEACTIVATION:
+            _LOGGER.info("%s webhook unregistered", MANUFACTURER)
+            self._webhook = False
+
+        elif event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_NACAMERA_CONNECTION:
+            _LOGGER.debug("%s camera reconnected", MANUFACTURER)
+            self.async_force_update(CAMERA_DATA_CLASS_NAME)
+
+    async def async_fetch_data(self, data_class_entry: str) -> None:
+        """Fetch data and notify."""
+        if self.data[data_class_entry] is None:
+            return
+
+        try:
+            await self.data[data_class_entry].async_update()
+
+        except pyatmo.NoDevice as err:
+            _LOGGER.debug(err)
+            self.data[data_class_entry] = None
+
+        except pyatmo.ApiError as err:
+            _LOGGER.debug(err)
+
+        except asyncio.TimeoutError as err:
+            _LOGGER.debug(err)
+            return
+
+        for update_callback in self.data_classes[data_class_entry].subscriptions:
+            if update_callback:
+                update_callback()
+
+    async def register_data_class(
+        self,
+        data_class_name: str,
+        data_class_entry: str,
+        update_callback: CALLBACK_TYPE,
+        **kwargs: Any,
+    ) -> None:
+        """Register data class."""
+        if data_class_entry in self.data_classes:
+            if update_callback not in self.data_classes[data_class_entry].subscriptions:
+                self.data_classes[data_class_entry].subscriptions.append(
+                    update_callback
+                )
+            return
+
+        self.data_classes[data_class_entry] = NetatmoDataClass(
+            name=data_class_entry,
+            interval=DEFAULT_INTERVALS[data_class_name],
+            next_scan=time() + DEFAULT_INTERVALS[data_class_name],
+            subscriptions=[update_callback],
+        )
+
+        self.data[data_class_entry] = DATA_CLASSES[data_class_name](
+            self._auth, **kwargs
+        )
+
+        await self.async_fetch_data(data_class_entry)
+
+        self._queue.append(self.data_classes[data_class_entry])
+        _LOGGER.debug("Data class %s added", data_class_entry)
+
+    async def unregister_data_class(
+        self, data_class_entry: str, update_callback: CALLBACK_TYPE | None
+    ) -> None:
+        """Unregister data class."""
+        self.data_classes[data_class_entry].subscriptions.remove(update_callback)
+
+        if not self.data_classes[data_class_entry].subscriptions:
+            self._queue.remove(self.data_classes[data_class_entry])
+            self.data_classes.pop(data_class_entry)
+            self.data.pop(data_class_entry)
+            _LOGGER.debug("Data class %s removed", data_class_entry)
 
     @property
     def webhook(self) -> bool:
         """Return the webhook state."""
         return self._webhook
-
-
-@callback
-def add_entities(entities, async_add_entities, hass):
-    """Add new sensor entities."""
-    async_add_entities(entities)
-
-
-async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle signals of config entry being updated."""
-    async_dispatcher_send(hass, "signal_update")
