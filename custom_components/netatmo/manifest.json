@@ -23,6 +23,6 @@
       "Welcome"
     ]
   },
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
   "version": "2021.11.11"
 }
