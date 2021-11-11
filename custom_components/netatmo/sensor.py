@@ -459,7 +459,8 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
         super().__init__(data_handler)
         self.entity_description = SENSOR_TYPES["battery_percent"]
 
-        self._id = netatmo_device.device_id
+        self._id = netatmo_device.entity.entity_id
+        self._device_id = netatmo_device.device_id
         self._device_name = netatmo_device.entity.name
         self._state_class_name = netatmo_device.state_class_name
         self._model = netatmo_device.entity.device_type.value
@@ -515,6 +516,17 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
     def available(self) -> bool:
         """Return entity availability."""
         return self.state is not None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info for the sensor."""
+        return DeviceInfo(
+            configuration_url=f"https://my.netatmo.com/app/{self._netatmo_type}",
+            identifiers={(DOMAIN, self._device_id)},
+            name=self._device_name,
+            manufacturer=MANUFACTURER,
+            model=MODELS[self._model],
+        )
 
 
 class NetatmoSensor(NetatmoBase, SensorEntity):
