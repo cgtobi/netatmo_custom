@@ -450,17 +450,17 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
 
     entity_description: NetatmoSensorEntityDescription
 
-    def __init__(self, netatmo_device: NetatmoDevice) -> None:
+    def __init__(
+        self, data_handler: NetatmoDataHandler, netatmo_device: NetatmoDevice
+    ) -> None:
         """Initialize the sensor."""
-        super().__init__(netatmo_device.data_handler)
+        super().__init__(data_handler)
         self.entity_description = SENSOR_TYPES["battery_percent"]
 
         self._id = netatmo_device.device_id
-        self._device_name = netatmo_device.device_name
+        self._device_name = netatmo_device.entity.name
         self._state_class_name = netatmo_device.state_class_name
-        self._home_id = netatmo_device.home_id
-        self._room_id = netatmo_device.device_id
-        self._model = netatmo_device.model
+        self._model = netatmo_device.entity.device_type
 
         self._data_classes.extend(
             [
@@ -476,9 +476,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
             ]
         )
 
-        self._home_status = self.data_handler.data[self._state_class_name]
-        self._room_status = self._home_status.rooms[self._room_id]
-        self._room_data: dict = self._data.rooms[self._home_id][self._room_id]
+        self._module = netatmo_device.entity
 
         self._attr_name = (
             f"{MANUFACTURER} {self._device_name} {self.entity_description.name}"
@@ -487,39 +485,24 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
         self._attr_unique_id = f"{self._id}-{self.entity_description.key}"
 
     @property
-    def _data(self) -> pyatmo.AsyncHomeData:
+    def _data(self) -> pyatmo.AsyncClimate:
         """Return data for this entity."""
-        return cast(
-            pyatmo.AsyncHomeData, self.data_handler.data[self._data_classes[0]["name"]]
-        )
+        return cast(pyatmo.AsyncClimate, self._climate_state)
 
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        self._home_status = self.data_handler.data[self._state_class_name]
-        if self._home_status is None:
+        if not self._module.reachable:
+            if self.available:
+                # self.state = None
+                self._attr_native_value = None
             return
 
-        self._room_status = self._home_status.rooms.get(self._room_id)
-        self._room_data = self._data.rooms.get(self._home_id, {}).get(self._room_id, {})
-
-        if not self._room_status or not self._room_data:
-            return
-
-        if self._room_status.get("reachable"):
-            self._attr_native_value = self._process_battery_state()
-        else:
-            self._attr_native_value = None
+        self._attr_native_value = self._process_battery_state()
 
     def _process_battery_state(self) -> int | None:
         """Construct room status."""
-        m_id = self._room_data["module_ids"][0]
-        batterylevel = None
-
-        if self._model == MODULE_TYPE_THERM:
-            batterylevel = self._home_status.thermostats[m_id].get("battery_state")
-        elif self._model == MODULE_TYPE_VALVE:
-            batterylevel = self._home_status.valves[m_id].get("battery_state")
+        batterylevel = self._module.battery_state
 
         if batterylevel:
             return process_battery_percentage(batterylevel)

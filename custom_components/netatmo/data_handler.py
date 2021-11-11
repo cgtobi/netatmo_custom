@@ -61,13 +61,9 @@ SCAN_INTERVAL = 60
 class NetatmoDevice:
     """Netatmo device class."""
 
-    data_handler: NetatmoDataHandler
-    home_id: str
     device_id: str
-    device_name: str
-    model: str
+    entity: pyatmo.climate.NetatmoModule
     state_class_name: str
-
 
 
 @dataclass
