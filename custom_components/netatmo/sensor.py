@@ -462,7 +462,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
         self._id = netatmo_device.device_id
         self._device_name = netatmo_device.entity.name
         self._state_class_name = netatmo_device.state_class_name
-        self._model = netatmo_device.entity.device_type
+        self._model = netatmo_device.entity.device_type.value
 
         self._data_classes.extend(
             [
