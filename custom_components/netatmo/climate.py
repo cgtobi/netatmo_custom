@@ -32,7 +32,10 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.device_registry import async_get_registry
-from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -256,7 +259,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                 self._id,
                 self._device_name,
                 self._model,
-                self._home_status_class,
+                self._climate_state_class,
             ),
         )
 
@@ -413,7 +416,8 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                 STATE_NETATMO_HOME,
             )
         elif (
-            preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX) and self._model == MODULE_TYPE_VALVE
+            preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
+            and self._model == MODULE_TYPE_VALVE
         ):
             await self._data.async_set_room_thermpoint(
                 self._id,
