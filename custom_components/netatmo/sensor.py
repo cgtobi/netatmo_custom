@@ -472,7 +472,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
                 },
                 {
                     "name": CLIMATE_STATE_CLASS_NAME,
-                    "home_id": self._home_id,
+                    "home_id": netatmo_device.entity.home.entity_id,
                     SIGNAL_NAME: self._state_class_name,
                 },
             ]
