@@ -430,8 +430,10 @@ async def async_setup_entry(
         add_public_entities,
     )
 
-    async def _async_create_entity(netatmo_device: NetatmoDevice) -> None:
-        entity = NetatmoClimateBatterySensor(netatmo_device)
+    async def _async_create_entity(
+        data_handler: NetatmoDataHandler, netatmo_device: NetatmoDevice
+    ) -> None:
+        entity = NetatmoClimateBatterySensor(data_handler, netatmo_device)
         _LOGGER.debug("Adding climate battery sensor %s", entity)
         async_add_entities([entity])
 
