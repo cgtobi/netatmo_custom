@@ -250,7 +250,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
         assert device
         self.hass.data[DOMAIN][DATA_DEVICE_IDS][self._home_id] = device.id
 
-        for module in self.room.modules:
+        for module in self._room.modules:
             async_dispatcher_send(
                 self.hass,
                 NETATMO_CREATE_BATTERY,
