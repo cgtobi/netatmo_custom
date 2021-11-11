@@ -255,8 +255,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                 self.hass,
                 NETATMO_CREATE_BATTERY,
                 self.data_handler
-                module,
-                self._climate_state_class,
+                NetatmoDevice(self._id, module, self._climate_state_class)
             )
 
     @callback
