@@ -254,8 +254,8 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
             async_dispatcher_send(
                 self.hass,
                 NETATMO_CREATE_BATTERY,
-                self.data_handler
-                NetatmoDevice(self._id, module, self._climate_state_class)
+                self.data_handler,
+                NetatmoDevice(self._id, module, self._climate_state_class),
             )
 
     @callback
