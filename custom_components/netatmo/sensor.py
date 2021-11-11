@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import logging
 from typing import cast
 
-import pyatmo
+from . import pyatmo
 
 from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
