@@ -35,6 +35,7 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.device_registry import async_entries_for_config_entry
 from homeassistant.helpers.dispatcher import (
@@ -48,6 +49,7 @@ from .const import (
     DATA_HANDLER,
     DOMAIN,
     MANUFACTURER,
+    MODELS,
     MODULE_TYPE_THERM,
     MODULE_TYPE_VALVE,
     NETATMO_CREATE_BATTERY,
