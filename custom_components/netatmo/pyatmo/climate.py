@@ -349,7 +349,7 @@ class AsyncClimate(AbstractClimate):
         temp: float = None,
         end_time: int = None,
     ) -> str | None:
-        """Set room themperature set point."""
+        """Set room temperature set point."""
         post_params = {
             "home_id": self.home_id,
             "room_id": room_id,
@@ -363,6 +363,7 @@ class AsyncClimate(AbstractClimate):
         if end_time is not None:
             post_params["endtime"] = str(end_time)
 
+        LOG.debug("Setting room (%s) temperature set point to %s", room_id, end_time)
         resp = await self.auth.async_post_request(
             url=_SETROOMTHERMPOINT_REQ,
             params=post_params,
@@ -392,6 +393,7 @@ class AsyncClimate(AbstractClimate):
         if schedule_id is not None and mode == "schedule":
             post_params["schedule_id"] = schedule_id
 
+        LOG.debug("Setting home (%s) mode to %s (%s)", self.home_id, mode, schedule_id)
         resp = await self.auth.async_post_request(
             url=_SETTHERMMODE_REQ,
             params=post_params,
@@ -404,6 +406,7 @@ class AsyncClimate(AbstractClimate):
         if not self.homes[self.home_id].is_valid_schedule(schedule_id):
             raise NoSchedule(f"{schedule_id} is not a valid schedule id")
 
+        LOG.debug("Setting home (%s) schedule to %s", self.home_id, schedule_id)
         resp = await self.auth.async_post_request(
             url=_SWITCHHOMESCHEDULE_REQ,
             params={"home_id": self.home_id, "schedule_id": schedule_id},
