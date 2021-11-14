@@ -210,6 +210,7 @@ class NetatmoRoom:
         self.therm_measured_temperature = raw_data.get("therm_measured_temperature")
         self.therm_setpoint_mode = raw_data.get("therm_setpoint_mode")
         self.therm_setpoint_temperature = raw_data.get("therm_setpoint_temperature")
+        self.heating_power_request = raw_data.get("heating_power_request")
 
 
 @dataclass
