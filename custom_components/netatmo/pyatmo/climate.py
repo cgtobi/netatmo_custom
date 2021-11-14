@@ -363,7 +363,7 @@ class AsyncClimate(AbstractClimate):
         if end_time is not None:
             post_params["endtime"] = str(end_time)
 
-        LOG.debug("Setting room (%s) temperature set point to %s", room_id, end_time)
+        LOG.debug("Setting room (%s) temperature set point to %s until %s", room_id, temp, end_time)
         resp = await self.auth.async_post_request(
             url=_SETROOMTHERMPOINT_REQ,
             params=post_params,
