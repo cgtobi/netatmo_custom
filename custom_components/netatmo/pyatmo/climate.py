@@ -22,6 +22,8 @@ LOG = logging.getLogger(__name__)
 
 # pylint: disable=W0613,R0201
 
+UNKNOWN = "Unknown"
+
 
 class NetatmoDeviceType(Enum):
     """Class to represent Netatmo device types."""
@@ -68,7 +70,7 @@ class NetatmoHome:
 
     def __init__(self, raw_data: dict) -> None:
         self.entity_id = raw_data["id"]
-        self.name = raw_data.get("name", "Unknown")
+        self.name = raw_data.get("name", UNKNOWN)
         self.modules = {
             module["id"]: NetatmoModule(home=self, module=module)
             for module in raw_data.get("modules", [])
@@ -87,7 +89,7 @@ class NetatmoHome:
         }
 
     def update_topology(self, raw_data: dict) -> None:
-        self.name = raw_data.get("name", "Unknown")
+        self.name = raw_data.get("name", UNKNOWN)
 
         raw_modules = raw_data.get("modules", [])
         for module in raw_modules:
@@ -226,7 +228,7 @@ class NetatmoSchedule:
 
     def __init__(self, home_id: str, raw_data) -> None:
         self.entity_id = raw_data["id"]
-        self.name = raw_data["name"]
+        self.name = raw_data.get("name", UNKNOWN)
         self.home_id = home_id
         self.selected = raw_data.get("selected", False)
         self.hg_temp = raw_data.get("hg_temp")
@@ -364,7 +366,12 @@ class AsyncClimate(AbstractClimate):
         if end_time is not None:
             post_params["endtime"] = str(end_time)
 
-        LOG.debug("Setting room (%s) temperature set point to %s until %s", room_id, temp, end_time)
+        LOG.debug(
+            "Setting room (%s) temperature set point to %s until %s",
+            room_id,
+            temp,
+            end_time,
+        )
         resp = await self.auth.async_post_request(
             url=_SETROOMTHERMPOINT_REQ,
             params=post_params,
