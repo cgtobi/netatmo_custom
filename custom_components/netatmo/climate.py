@@ -251,6 +251,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
         self.hass.data[DOMAIN][DATA_DEVICE_IDS][self._home_id] = device.id
 
         for module in self._room.modules.values():
+            _LOGGER.debug("Dispatching sensor creation for %s", module)
             async_dispatcher_send(
                 self.hass,
                 NETATMO_CREATE_BATTERY,
