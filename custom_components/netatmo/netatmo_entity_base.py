@@ -71,9 +71,10 @@ class NetatmoBase(Entity):
 
         registry = await self.hass.helpers.device_registry.async_get_registry()
         device = registry.async_get_device({(DOMAIN, self._id)}, set())
-        _LOGGER.debug("added_to_hass - device: %s", device)
-        _LOGGER.debug("added_to_hass - %s : %s", self._device_name, self)
-        self.hass.data[DOMAIN][DATA_DEVICE_IDS][self._id] = device.id
+        if device is not None:
+            _LOGGER.debug("added_to_hass - device: %s", device)
+            _LOGGER.debug("added_to_hass - %s : %s", self._device_name, self)
+            self.hass.data[DOMAIN][DATA_DEVICE_IDS][self._id] = device.id
 
         self.async_update_callback()
 
