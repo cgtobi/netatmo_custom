@@ -250,13 +250,13 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
         assert device
         self.hass.data[DOMAIN][DATA_DEVICE_IDS][self._home_id] = device.id
 
-        _LOGGER.debug("Dispatching sensor creation for %s", self._room)
-        async_dispatcher_send(
-            self.hass,
-            NETATMO_CREATE_BATTERY,
-            self.data_handler,
-            NetatmoDevice(self._id, self._room.modules[0], self._climate_state_class),
-        )
+        # _LOGGER.debug("Dispatching sensor creation for %s", self._room)
+        # async_dispatcher_send(
+        #     self.hass,
+        #     NETATMO_CREATE_BATTERY,
+        #     self.data_handler,
+        #     NetatmoDevice(self._id, self._room.modules[0], self._climate_state_class),
+        # )
 
     @callback
     def handle_event(self, event: dict) -> None:
