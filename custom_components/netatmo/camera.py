@@ -21,7 +21,7 @@ from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
+from .const import (  # DATA_EVENTS,
     ATTR_CAMERA_LIGHT_MODE,
     ATTR_PERSON,
     ATTR_PERSONS,
@@ -141,8 +141,6 @@ class NetatmoCamera(NetatmoBase, Camera):
                 },
             ]
         )
-        # if self._model == "NDB":
-        #     print(self._attr_unique_id, self._device_name, self._camera.alim_status)
 
     async def async_added_to_hass(self) -> None:
         """Entity created."""
@@ -191,7 +189,6 @@ class NetatmoCamera(NetatmoBase, Camera):
     ) -> bytes | None:
         """Return a still image response from the camera."""
         try:
-            # print(await self._camera.async_get_live_snapshot())
             return cast(bytes, await self._camera.async_get_live_snapshot())
         except (
             aiohttp.ClientPayloadError,
@@ -236,14 +233,15 @@ class NetatmoCamera(NetatmoBase, Camera):
         """Update the entity's state."""
         self._vpnurl = self._camera.vpn_url
         self._localurl = self._camera.local_url
-        self._monitoring = self._camera.monitoring
         self._sd_status = self._camera.sd_status
         self._alim_status = self._camera.alim_status
         self._is_local = self._camera.is_local
-        self._attr_is_streaming = bool(self._monitoring)
         self._attr_is_on = self._alim_status is not None
         self._attr_available = self._alim_status is not None
-        self._attr_motion_detection_enabled = bool(self._monitoring)
+
+        if self._camera.monitoring is not None:
+            self._attr_is_streaming = self._camera.monitoring
+            self._attr_motion_detection_enabled = self._camera.monitoring
 
         # if self._model == "NACamera":  # Smart Indoor Camera
         #     self.hass.data[DOMAIN][DATA_EVENTS][self._id] = self.process_events(

@@ -60,7 +60,7 @@ class NetatmoDevice:
     """Netatmo device class."""
 
     data_handler: NetatmoDataHandler
-    device: pyatmo.Module
+    device: pyatmo.modules.Module
     parent_id: str
     signal_name: str
 
