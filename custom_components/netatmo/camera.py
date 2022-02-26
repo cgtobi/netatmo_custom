@@ -5,7 +5,7 @@ import logging
 from typing import Any, cast
 
 import aiohttp
-from .pyatmo.import ApiError as NetatmoApiError, modules as NaModules
+from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
 from .pyatmo.modules.device_types import (
     DEVICE_DESCRIPTION_MAP,
     DeviceCategory as NetatmoDeviceCategory,

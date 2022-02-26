@@ -7,11 +7,12 @@ rm ${path}/*.py
 GH_REPO="home-assistant"
 GH_BRANCH="netatmo_shutters"
 gh_path="${GH_RAW_BASE}/${GH_REPO}/${GH_BRANCH}/homeassistant/components/netatmo"
-files="__init__.py const.py light.py cover.py api.py data_handler.py media_source.py switch.py camera.py device_trigger.py netatmo_entity_base.py climate.py diagnostics.py select.py webhook.py config_flow.py helper.py sensor.py"
+files="__init__.py const.py light.py cover.py api.py data_handler.py media_source.py switch.py camera.py device_trigger.py netatmo_entity_base.py climate.py diagnostics.py select.py switch.py webhook.py config_flow.py helper.py sensor.py"
 
 for file in ${files}; do
   echo ${file}
   wget ${gh_path}/${file} -O ${path}/${file}
+  gsed -i 's/from pyatmo /from \.pyatmo /g' ${path}/${file}
   gsed -i 's/import pyatmo/from . import pyatmo/g' ${path}/${file}
   gsed -i 's/from pyatmo./from .pyatmo./g' ${path}/${file}
 done
