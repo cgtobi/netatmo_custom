@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from . import pyatmo
-from .pyatmo.modules.device_types import NetatmoDeviceType
+from .pyatmo.modules.device_types import DeviceType as NetatmoDeviceType
 
 from homeassistant.components.light import LightEntity
 from homeassistant.config_entries import ConfigEntry
@@ -15,15 +15,15 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_URL_SECURITY,
     DATA_HANDLER,
     DOMAIN,
     EVENT_TYPE_LIGHT_MODE,
     MANUFACTURER,
-    TYPE_SECURITY,
     WEBHOOK_LIGHT_MODE,
     WEBHOOK_PUSH_TYPE,
 )
-from .data_handler import HOME, NetatmoDataHandler
+from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,13 +35,13 @@ async def async_setup_entry(
     """Set up the Netatmo camera light platform."""
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    camera_topology = data_handler.account
+    account_topology = data_handler.account
 
-    if not camera_topology or not camera_topology.raw_data:
+    if not account_topology or not account_topology.raw_data:
         raise PlatformNotReady
 
     entities = []
-    for home_id in camera_topology.homes:
+    for home_id in account_topology.homes:
         signal_name = f"{HOME}-{home_id}"
 
         await data_handler.subscribe(HOME, signal_name, None, home_id=home_id)
@@ -75,9 +75,20 @@ class NetatmoLight(NetatmoBase, LightEntity):
         self._device_name = self._camera.name
         self._attr_name = f"{MANUFACTURER} {self._device_name}"
         self._model = self._camera.device_type
-        self._netatmo_type = TYPE_SECURITY
+        self._netatmo_type = CONF_URL_SECURITY
         self._is_on = False
         self._attr_unique_id = f"{self._id}-light"
+
+        self._signal_name = f"{HOME}-{self._home_id}"
+        self._publishers.extend(
+            [
+                {
+                    "name": HOME,
+                    "home_id": self._camera.home.entity_id,
+                    SIGNAL_NAME: self._signal_name,
+                },
+            ]
+        )
 
     async def async_added_to_hass(self) -> None:
         """Entity created."""
@@ -135,7 +146,7 @@ class NetatmoLight(NetatmoBase, LightEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn camera floodlight into auto mode."""
         _LOGGER.debug("Turn camera '%s' to auto mode", self.name)
-        await self._camera.async_floodlight_on()
+        await self._camera.async_floodlight_auto()
 
     @callback
     def async_update_callback(self) -> None:

@@ -17,3 +17,4 @@ class NetatmoArea:
     mode: str
     show_on_map: bool
     uuid: UUID = uuid4()
+    area_id: str | None = None

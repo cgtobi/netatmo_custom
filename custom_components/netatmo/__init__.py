@@ -8,6 +8,7 @@ import secrets
 
 import aiohttp
 from . import pyatmo
+from .pyatmo.const import ALL_SCOPES as NETATMO_SCOPES
 import voluptuous as vol
 
 from homeassistant.components import cloud
@@ -36,7 +37,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.typing import ConfigType
 
 from . import api, config_flow
-from .const import (
+from .const import (  # NETATMO_SCOPES,
     AUTH,
     CONF_CLOUDHOOK_URL,
     DATA_CAMERAS,
@@ -47,7 +48,6 @@ from .const import (
     DATA_PERSONS,
     DATA_SCHEDULES,
     DOMAIN,
-    NETATMO_SCOPES,
     OAUTH2_AUTHORIZE,
     OAUTH2_TOKEN,
     PLATFORMS,

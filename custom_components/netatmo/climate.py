@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from . import pyatmo
-from .pyatmo.modules.device_types import NetatmoDeviceCategory
+from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
 import voluptuous as vol
 
 from homeassistant.components.climate import ClimateEntity
@@ -44,6 +44,7 @@ from .const import (
     ATTR_HEATING_POWER_REQUEST,
     ATTR_SCHEDULE_NAME,
     ATTR_SELECTED_SCHEDULE,
+    CONF_URL_ENERGY,
     DATA_HANDLER,
     DATA_HOMES,
     DATA_SCHEDULES,
@@ -54,9 +55,8 @@ from .const import (
     EVENT_TYPE_THERM_MODE,
     NETATMO_CREATE_BATTERY,
     SERVICE_SET_SCHEDULE,
-    TYPE_ENERGY,
 )
-from .data_handler import HOME, NetatmoDataHandler, NetatmoDevice
+from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler, NetatmoDevice
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -120,13 +120,13 @@ async def async_setup_entry(
     """Set up the Netatmo energy platform."""
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    climate_topology = data_handler.account
+    account_topology = data_handler.account
 
-    if not climate_topology or climate_topology.raw_data == {}:
+    if not account_topology or account_topology.raw_data == {}:
         raise PlatformNotReady
 
     entities = []
-    for home_id, home in climate_topology.homes.items():
+    for home_id, home in account_topology.homes.items():
         signal_name = f"{HOME}-{home_id}"
 
         await data_handler.subscribe(HOME, signal_name, None, home_id=home_id)
@@ -136,18 +136,18 @@ async def async_setup_entry(
                 continue
             entities.append(NetatmoThermostat(data_handler, room))
 
-        hass.data[DOMAIN][DATA_SCHEDULES][home_id] = climate_topology.homes[
+        hass.data[DOMAIN][DATA_SCHEDULES][home_id] = account_topology.homes[
             home_id
         ].schedules
 
-        hass.data[DOMAIN][DATA_HOMES][home_id] = climate_topology.homes[home_id].name
+        hass.data[DOMAIN][DATA_HOMES][home_id] = account_topology.homes[home_id].name
 
     _LOGGER.debug("Adding climate devices %s", entities)
     async_add_entities(entities, True)
 
     platform = entity_platform.async_get_current_platform()
 
-    if climate_topology is not None:
+    if account_topology is not None:
         platform.async_register_entity_service(
             SERVICE_SET_SCHEDULE,
             {vol.Required(ATTR_SCHEDULE_NAME): cv.string},
@@ -165,9 +165,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
     _attr_target_temperature_step = PRECISION_HALVES
     _attr_temperature_unit = TEMP_CELSIUS
 
-    def __init__(
-        self, data_handler: NetatmoDataHandler, room: pyatmo.NetatmoRoom
-    ) -> None:
+    def __init__(self, data_handler: NetatmoDataHandler, room: pyatmo.Room) -> None:
         """Initialize the sensor."""
         ClimateEntity.__init__(self)
         super().__init__(data_handler)
@@ -176,11 +174,20 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
         self._id = self._room.entity_id
         self._home_id = self._room.home.entity_id
 
-        self._climate_state_class = f"{HOME}-{self._room.home.entity_id}"
+        self._signal_name = f"{HOME}-{self._home_id}"
+        self._publishers.extend(
+            [
+                {
+                    "name": HOME,
+                    "home_id": self._room.home.entity_id,
+                    SIGNAL_NAME: self._signal_name,
+                },
+            ]
+        )
 
         self._model: str = f"{self._room.climate_type}"
 
-        self._netatmo_type = TYPE_ENERGY
+        self._netatmo_type = CONF_URL_ENERGY
 
         self._attr_name = self._room.name
         self._away: bool | None = None
@@ -226,7 +233,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                     self.data_handler,
                     module,
                     self._id,
-                    self._climate_state_class,
+                    self._signal_name,
                 ),
             )
 
@@ -250,7 +257,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                 ATTR_SELECTED_SCHEDULE
             ] = self._selected_schedule
             self.async_write_ha_state()
-            self.data_handler.async_force_update(self._climate_state_class)
+            self.data_handler.async_force_update(self._signal_name)
             return
 
         home = data["home"]
@@ -267,7 +274,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                 self._attr_target_temperature = self._away_temperature
             elif self._attr_preset_mode in [PRESET_SCHEDULE, PRESET_HOME]:
                 self.async_update_callback()
-                self.data_handler.async_force_update(self._climate_state_class)
+                self.data_handler.async_force_update(self._signal_name)
             self.async_write_ha_state()
             return
 
@@ -323,22 +330,12 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
         if hvac_mode == HVAC_MODE_OFF:
             await self.async_turn_off()
         elif hvac_mode == HVAC_MODE_AUTO:
-            # if self.hvac_mode == HVAC_MODE_OFF:
-            #     await self.async_turn_on()
             await self.async_set_preset_mode(PRESET_SCHEDULE)
         elif hvac_mode == HVAC_MODE_HEAT:
             await self.async_set_preset_mode(PRESET_BOOST)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        # if self.hvac_mode == HVAC_MODE_OFF:
-        #     await self.async_turn_on()
-
-        # if self.target_temperature == 0:
-        #     await self._room.async_therm_set(
-        #         STATE_NETATMO_HOME,
-        #     )
-
         if (
             preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
             and self._model == NA_VALVE

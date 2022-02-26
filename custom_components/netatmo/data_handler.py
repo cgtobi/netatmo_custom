@@ -29,6 +29,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+SIGNAL_NAME = "signal_name"
 ACCOUNT = "account"
 HOME = "home"
 WEATHER = "weather"
@@ -36,11 +37,11 @@ AIR_CARE = "air_care"
 PUBLIC = "public"
 
 PUBLISHERS = {
-    "account": "async_update_topology",
-    "home": "async_update_status",
-    "weather": "async_update_weather_stations",
-    "air_care": "async_update_air_care",
-    "public": "async_update_public_weather",
+    ACCOUNT: "async_update_topology",
+    HOME: "async_update_status",
+    WEATHER: "async_update_weather_stations",
+    AIR_CARE: "async_update_air_care",
+    PUBLIC: "async_update_public_weather",
 }
 
 BATCH_SIZE = 3
@@ -59,9 +60,9 @@ class NetatmoDevice:
     """Netatmo device class."""
 
     data_handler: NetatmoDataHandler
-    device: pyatmo.NetatmoModule
+    device: pyatmo.Module
     parent_id: str
-    state_class_name: str
+    signal_name: str
 
 
 @dataclass
@@ -87,13 +88,11 @@ class NetatmoDataHandler:
         self.config_entry = config_entry
         self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
         self.publisher: dict = {}
-        self.data: dict = {}
         self._queue: deque = deque()
         self._webhook: bool = False
 
     async def async_setup(self) -> None:
         """Set up the Netatmo data handler."""
-        print("""Set up the Netatmo data handler.""")
         async_track_time_interval(
             self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
         )
@@ -110,6 +109,11 @@ class NetatmoDataHandler:
 
         await self.subscribe(ACCOUNT, ACCOUNT, None)
 
+        try:
+            await self.account.async_update_air_care()
+        except pyatmo.NoDevice as err:
+            _LOGGER.debug(err)
+
     async def async_update(self, event_time: datetime) -> None:
         """
         Update device.
@@ -125,7 +129,6 @@ class NetatmoDataHandler:
                 self.publisher[data_class_name].next_scan = time() + data_class.interval
 
                 await self.async_fetch_data(data_class_name)
-                print("Update device.", data_class_name)
 
         self._queue.rotate(BATCH_SIZE)
 
@@ -158,7 +161,6 @@ class NetatmoDataHandler:
 
         except pyatmo.NoDevice as err:
             _LOGGER.debug(err)
-            self.data[signal_name] = None
 
         except pyatmo.ApiError as err:
             _LOGGER.debug(err)
@@ -179,11 +181,13 @@ class NetatmoDataHandler:
         **kwargs: Any,
     ) -> None:
         """Subscribe to publisher."""
-        print("""Subscribe to publisher.""", publisher, signal_name)
         if signal_name in self.publisher:
             if update_callback not in self.publisher[signal_name].subscriptions:
                 self.publisher[signal_name].subscriptions.append(update_callback)
             return
+
+        if publisher == "public":
+            kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
 
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
@@ -212,7 +216,6 @@ class NetatmoDataHandler:
         if not self.publisher[signal_name].subscriptions:
             self._queue.remove(self.publisher[signal_name])
             self.publisher.pop(signal_name)
-            self.data.pop(signal_name)
             _LOGGER.debug("Publisher %s removed", signal_name)
 
     @property

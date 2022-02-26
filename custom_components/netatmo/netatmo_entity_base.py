@@ -1,7 +1,10 @@
 """Base class for Netatmo entities."""
 from __future__ import annotations
 
-from .pyatmo.modules.device_types import DEVICE_DESCRIPTION_MAP, NetatmoDeviceType
+from .pyatmo.modules.device_types import (
+    DEVICE_DESCRIPTION_MAP,
+    DeviceType as NetatmoDeviceType,
+)
 
 from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.core import callback
@@ -23,7 +26,7 @@ class NetatmoBase(Entity):
     def __init__(self, data_handler: NetatmoDataHandler) -> None:
         """Set up Netatmo entity base."""
         self.data_handler = data_handler
-        self._data_classes: list[dict] = []
+        self._publishers: list[dict] = []
 
         self._device_name: str = ""
         self._id: str = ""
@@ -35,31 +38,31 @@ class NetatmoBase(Entity):
 
     async def async_added_to_hass(self) -> None:
         """Entity created."""
-        for data_class in self._data_classes:
-            signal_name = data_class[SIGNAL_NAME]
+        for publisher in self._publishers:
+            signal_name = publisher[SIGNAL_NAME]
 
-            if "home_id" in data_class:
+            if "home_id" in publisher:
                 await self.data_handler.subscribe(
-                    data_class["name"],
+                    publisher["name"],
                     signal_name,
                     self.async_update_callback,
-                    home_id=data_class["home_id"],
+                    home_id=publisher["home_id"],
                 )
 
-            elif data_class["name"] == PUBLIC:
+            elif publisher["name"] == PUBLIC:
                 await self.data_handler.subscribe(
-                    data_class["name"],
+                    publisher["name"],
                     signal_name,
                     self.async_update_callback,
-                    lat_ne=data_class["lat_ne"],
-                    lon_ne=data_class["lon_ne"],
-                    lat_sw=data_class["lat_sw"],
-                    lon_sw=data_class["lon_sw"],
+                    lat_ne=publisher["lat_ne"],
+                    lon_ne=publisher["lon_ne"],
+                    lat_sw=publisher["lat_sw"],
+                    lon_sw=publisher["lon_sw"],
                 )
 
             else:
                 await self.data_handler.subscribe(
-                    data_class["name"], signal_name, self.async_update_callback
+                    publisher["name"], signal_name, self.async_update_callback
                 )
 
             for sub in self.data_handler.publisher[signal_name].subscriptions:
@@ -76,9 +79,9 @@ class NetatmoBase(Entity):
         """Run when entity will be removed from hass."""
         await super().async_will_remove_from_hass()
 
-        for data_class in self._data_classes:
+        for publisher in self._publishers:
             await self.data_handler.unsubscribe(
-                data_class[SIGNAL_NAME], self.async_update_callback
+                publisher[SIGNAL_NAME], self.async_update_callback
             )
 
     @callback
@@ -90,7 +93,7 @@ class NetatmoBase(Entity):
     def device_info(self) -> DeviceInfo:
         """Return the device info for the sensor."""
         return DeviceInfo(
-            configuration_url=f"https://my.netatmo.com/app/{self._netatmo_type}",
+            configuration_url=self._netatmo_type,
             identifiers={(DOMAIN, self._id)},
             name=self._device_name,
             manufacturer=MANUFACTURER,

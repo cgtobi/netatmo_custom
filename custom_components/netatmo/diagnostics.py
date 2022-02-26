@@ -46,7 +46,7 @@ async def async_get_config_entry_diagnostics(
         ),
         "data": {
             ACCOUNT: async_redact_data(
-                getattr(data_handler.data[ACCOUNT], "raw_data"),
+                getattr(data_handler.account, "raw_data"),
                 TO_REDACT,
             )
         },

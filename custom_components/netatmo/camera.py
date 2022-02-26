@@ -5,8 +5,12 @@ import logging
 from typing import Any, cast
 
 import aiohttp
-from . import pyatmo
-from .pyatmo.modules.device_types import DEVICE_DESCRIPTION_MAP, NetatmoDeviceType
+from .pyatmo.import ApiError as NetatmoApiError, modules as NaModules
+from .pyatmo.modules.device_types import (
+    DEVICE_DESCRIPTION_MAP,
+    DeviceCategory as NetatmoDeviceCategory,
+    DeviceType as NetatmoDeviceType,
+)
 import voluptuous as vol
 
 from homeassistant.components.camera import SUPPORT_STREAM, Camera
@@ -22,6 +26,7 @@ from .const import (
     ATTR_PERSON,
     ATTR_PERSONS,
     CAMERA_LIGHT_MODES,
+    CONF_URL_SECURITY,
     DATA_CAMERAS,
     DATA_HANDLER,
     DATA_PERSONS,
@@ -33,12 +38,11 @@ from .const import (
     SERVICE_SET_CAMERA_LIGHT,
     SERVICE_SET_PERSON_AWAY,
     SERVICE_SET_PERSONS_HOME,
-    TYPE_SECURITY,
     WEBHOOK_LIGHT_MODE,
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
 )
-from .data_handler import HOME, NetatmoDataHandler
+from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,29 +56,22 @@ async def async_setup_entry(
     """Set up the Netatmo camera platform."""
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    camera_topology = data_handler.account
+    account_topology = data_handler.account
 
-    if not camera_topology or not camera_topology.raw_data:
+    if not account_topology or not account_topology.raw_data:
         raise PlatformNotReady
 
     entities = []
-    for home_id, home in camera_topology.homes.items():
+    for home_id in account_topology.homes:
         signal_name = f"{HOME}-{home_id}"
 
         await data_handler.subscribe(HOME, signal_name, None, home_id=home_id)
 
-        # if (camera_state := data_handler.account) is None:
-        #     continue
-
-        for camera in camera_topology.homes[home_id].modules.values():
-            if camera.device_type in {
-                NetatmoDeviceType.NOC,
-                NetatmoDeviceType.NACamera,
-                NetatmoDeviceType.NDB,
-            }:
+        for camera in account_topology.homes[home_id].modules.values():
+            if camera.device_category is NetatmoDeviceCategory.camera:
                 entities.append(NetatmoCamera(data_handler, camera))
 
-    for home in camera_topology.homes.values():
+    for home in account_topology.homes.values():
         if home.entity_id is None:
             continue
 
@@ -110,7 +107,7 @@ class NetatmoCamera(NetatmoBase, Camera):
     def __init__(
         self,
         data_handler: NetatmoDataHandler,
-        camera: pyatmo.modules.NOC | pyatmo.modules.NACamera,
+        camera: NaModules.NOC | NaModules.NACamera | NaModules.NDB,
     ) -> None:
         """Set up for access to the Netatmo camera images."""
         Camera.__init__(self)
@@ -122,7 +119,7 @@ class NetatmoCamera(NetatmoBase, Camera):
         self._device_name = self._camera.name
         self._attr_name = f"{MANUFACTURER} {self._device_name}"
         self._model = self._camera.device_type
-        self._netatmo_type = TYPE_SECURITY
+        self._netatmo_type = CONF_URL_SECURITY
         self._attr_unique_id = f"{self._id}-{self._model}"
         self._quality = DEFAULT_QUALITY
         self._vpnurl: str | None = None
@@ -132,6 +129,20 @@ class NetatmoCamera(NetatmoBase, Camera):
         self._alim_status: int | None = None
         self._is_local: bool | None = None
         self._light_state = None
+        self._attr_brand = MANUFACTURER
+
+        self._signal_name = f"{HOME}-{self._home_id}"
+        self._publishers.extend(
+            [
+                {
+                    "name": HOME,
+                    "home_id": self._home_id,
+                    SIGNAL_NAME: self._signal_name,
+                },
+            ]
+        )
+        # if self._model == "NDB":
+        #     print(self._attr_unique_id, self._device_name, self._camera.alim_status)
 
     async def async_added_to_hass(self) -> None:
         """Entity created."""
@@ -180,41 +191,22 @@ class NetatmoCamera(NetatmoBase, Camera):
     ) -> bytes | None:
         """Return a still image response from the camera."""
         try:
+            # print(await self._camera.async_get_live_snapshot())
             return cast(bytes, await self._camera.async_get_live_snapshot())
         except (
             aiohttp.ClientPayloadError,
             aiohttp.ContentTypeError,
             aiohttp.ServerDisconnectedError,
             aiohttp.ClientConnectorError,
-            pyatmo.ApiError,
+            NetatmoApiError,
         ) as err:
             _LOGGER.debug("Could not fetch live camera image (%s)", err)
         return None
 
     @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return bool(self._monitoring)
-
-    @property
     def supported_features(self) -> int:
         """Return supported features."""
         return SUPPORT_STREAM
-
-    @property
-    def brand(self) -> str:
-        """Return the camera brand."""
-        return MANUFACTURER
-
-    @property
-    def motion_detection_enabled(self) -> bool:
-        """Return the camera motion detection status."""
-        return bool(self._monitoring)
-
-    @property
-    def is_on(self) -> bool:
-        """Return true if on."""
-        return self.is_streaming
 
     async def async_turn_off(self) -> None:
         """Turn off camera."""
@@ -226,10 +218,13 @@ class NetatmoCamera(NetatmoBase, Camera):
 
     async def stream_source(self) -> str:
         """Return the stream source."""
+        if self._camera.is_local:
+            await self._camera.async_update_camera_urls()
+
         url = "{0}/live/files/{1}/index.m3u8"
-        if self._localurl:
-            return url.format(self._localurl, self._quality)
-        return url.format(self._vpnurl, self._quality)
+        if self._camera.local_url:
+            return url.format(self._camera.local_url, self._quality)
+        return url.format(self._camera.vpn_url, self._quality)
 
     @property
     def model(self) -> str:
@@ -246,6 +241,9 @@ class NetatmoCamera(NetatmoBase, Camera):
         self._alim_status = self._camera.alim_status
         self._is_local = self._camera.is_local
         self._attr_is_streaming = bool(self._monitoring)
+        self._attr_is_on = self._alim_status is not None
+        self._attr_available = self._alim_status is not None
+        self._attr_motion_detection_enabled = bool(self._monitoring)
 
         # if self._model == "NACamera":  # Smart Indoor Camera
         #     self.hass.data[DOMAIN][DATA_EVENTS][self._id] = self.process_events(
@@ -328,10 +326,10 @@ class NetatmoCamera(NetatmoBase, Camera):
         else:
             _LOGGER.debug("Set home as empty")
 
-    # async def _service_set_camera_light(self, **kwargs: Any) -> None:
-    #     """Service to set light mode."""
-    #     if self._camera.device_type is not NDT.NOC:
-    #         raise HomeAssistantError(f"{self._model} does not have a floodlight")
-    #     mode = str(kwargs.get(ATTR_CAMERA_LIGHT_MODE))
-    #     _LOGGER.debug("Turn %s camera light for '%s'", mode, self._attr_name)
-    #     await self._camera.async_set_floodlight_state(mode)
+    async def _service_set_camera_light(self, **kwargs: Any) -> None:
+        """Service to set light mode."""
+        if not isinstance(self._camera, NaModules.netatmo.NOC):
+            raise HomeAssistantError(f"{self._model} does not have a floodlight")
+        mode = str(kwargs.get(ATTR_CAMERA_LIGHT_MODE))
+        _LOGGER.debug("Turn %s camera light for '%s'", mode, self._attr_name)
+        await self._camera.async_set_floodlight_state(mode)

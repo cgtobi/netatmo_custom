@@ -13,14 +13,14 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_URL_ENERGY,
     DATA_HANDLER,
     DATA_SCHEDULES,
     DOMAIN,
     EVENT_TYPE_SCHEDULE,
     MANUFACTURER,
-    TYPE_ENERGY,
 )
-from .data_handler import HOME, NetatmoDataHandler
+from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,6 +87,17 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
         self._home = home
         self._home_id = home.entity_id
 
+        self._signal_name = f"{HOME}-{self._home_id}"
+        self._publishers.extend(
+            [
+                {
+                    "name": HOME,
+                    "home_id": self._home.entity_id,
+                    SIGNAL_NAME: self._signal_name,
+                },
+            ]
+        )
+
         # self._climate_state_class = f"{CLIMATE_STATE_CLASS_NAME}-{self._home_id}"
         # self._climate_state: pyatmo.AsyncClimate = data_handler.data[
         #     self._climate_state_class
@@ -112,7 +123,7 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
         self._attr_name = f"{MANUFACTURER} {self._device_name}"
 
         self._model: str = "NATherm1"
-        self._netatmo_type = TYPE_ENERGY
+        self._netatmo_type = CONF_URL_ENERGY
 
         self._attr_unique_id = f"{self._home_id}-schedule-select"
 
