@@ -1,14 +1,14 @@
 """Support for Netatmo security devices (cameras, smoke detectors, sirens, window sensors, events and persons)."""
-from .future__ import annotations
+from __future__ import annotations
 
 import imghdr
 import time
-from .c import ABC
-from .llections import defaultdict
-from .ping import Any
+from abc import ABC
+from collections import defaultdict
+from typing import Any
 
 import aiohttp
-from .quests.exceptions import ReadTimeout
+from requests.exceptions import ReadTimeout
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
@@ -39,7 +39,7 @@ class AbstractCameraData(ABC):
     types: dict = defaultdict(dict)
 
     def process(self) -> None:
-        """Process data from .I."""
+        """Process data from API."""
         self.homes = {d["id"]: d for d in self.raw_data}
 
         for item in self.raw_data:
@@ -456,7 +456,7 @@ class CameraData(AbstractCameraData):
         self.auth = auth
 
     def update(self, events: int = 30) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         resp = self.auth.post_request(url=_GETHOMEDATA_REQ, params={"size": events})
 
         self.raw_data = extract_raw_data(resp.json(), "homes")
@@ -564,7 +564,7 @@ class CameraData(AbstractCameraData):
         image_id: str,
         key: str,
     ) -> tuple[bytes, str | None]:
-        """Download a specific image (of an event or user face) from .e camera."""
+        """Download a specific image (of an event or user face) from the camera."""
         post_params = {"image_id": image_id, "key": key}
         resp = self.auth.post_request(
             url=_GETCAMERAPICTURE_REQ,
@@ -636,7 +636,7 @@ class AsyncCameraData(AbstractCameraData):
         self.auth = auth
 
     async def async_update(self, events: int = 30) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         resp = await self.auth.async_post_request(
             url=_GETHOMEDATA_REQ,
             params={"size": events},
@@ -766,7 +766,7 @@ class AsyncCameraData(AbstractCameraData):
         )
 
     async def async_get_live_snapshot(self, camera_id: str) -> bytes | None:
-        """Retrieve live snapshot from .mera."""
+        """Retrieve live snapshot from camera."""
         local, vpn = self.camera_urls(camera_id)
         if not local and not vpn:
             return None
@@ -785,7 +785,7 @@ class AsyncCameraData(AbstractCameraData):
         image_id: str,
         key: str,
     ) -> tuple[bytes, str | None]:
-        """Download a specific image (of an event or user face) from .e camera."""
+        """Download a specific image (of an event or user face) from the camera."""
         post_params = {"image_id": image_id, "key": key}
         resp = await self.auth.async_get_image(
             url=_GETCAMERAPICTURE_REQ,

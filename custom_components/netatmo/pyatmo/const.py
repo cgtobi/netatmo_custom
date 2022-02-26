@@ -1,5 +1,5 @@
 """Common constants."""
-from .future__ import annotations
+from __future__ import annotations
 
 ERRORS: dict[int, str] = {
     400: "Bad request",

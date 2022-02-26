@@ -27,8 +27,9 @@ files="__init__.py account.py exceptions.py room.py __main__.py auth.py helpers.
 
 for file in ${files}; do
   wget ${gh_path}/${file} -O ${path}/${file}
-  gsed -i 's/from pyatmo/from ./g' ${path}/${file}
-  gsed -i 's/from ../from ./g' ${path}/${file}
+  gsed -i 's/from pyatmo /from \. /g' ${path}/${file}
+  gsed -i 's/from pyatmo/from \./g' ${path}/${file}
+  gsed -i 's/from \.\./from \./g' ${path}/${file}
 done
 
 path="custom_components/netatmo/pyatmo/modules"

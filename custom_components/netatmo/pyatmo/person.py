@@ -1,14 +1,14 @@
 """Module to represent a Netatmo person."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
-from .taclasses import dataclass
-from .ping import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .modules.base_class import NetatmoBase
 
 if TYPE_CHECKING:
-    from .ome import Home
+    from .home import Home
 
 LOG = logging.getLogger(__name__)
 

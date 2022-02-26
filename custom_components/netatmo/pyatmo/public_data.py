@@ -1,10 +1,10 @@
 """Support for Netatmo public weather data."""
-from .future__ import annotations
+from __future__ import annotations
 
 import dataclasses
-from .c import ABC
-from .llections import defaultdict
-from .ping import Any
+from abc import ABC
+from collections import defaultdict
+from typing import Any
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
@@ -33,7 +33,7 @@ class AbstractPublicData(ABC):
     status: str = ""
 
     def process(self, resp: dict) -> None:
-        """Process data from .I."""
+        """Process data from API."""
         self.status = resp.get("status", "")
 
     def stations_in_area(self) -> int:
@@ -155,7 +155,7 @@ class PublicData(AbstractPublicData):
             LON_SW {str} -- Longitude of the south west corner of the requested area. (-180 <= LON_SW <= 180)
 
         Keyword Arguments:
-            required_data_type {str} -- comma-separated list from .ove _STATION or _ACCESSORY values (default: {None})
+            required_data_type {str} -- comma-separated list from above _STATION or _ACCESSORY values (default: {None})
         """
         self.auth = auth
         self.required_data_type = required_data_type
@@ -163,7 +163,7 @@ class PublicData(AbstractPublicData):
         self.filtering: bool = filtering
 
     def update(self) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         post_params: dict = {
             **dataclasses.asdict(self.location),
             "filter": self.filtering,
@@ -176,7 +176,7 @@ class PublicData(AbstractPublicData):
         try:
             self.raw_data = resp["body"]
         except (KeyError, TypeError) as exc:
-            raise NoDevice("No public weather data returned by Netatmo server") from .c
+            raise NoDevice("No public weather data returned by Netatmo server") from exc
 
         self.process(resp)
 
@@ -204,7 +204,7 @@ class AsyncPublicData(AbstractPublicData):
             LON_SW {str} -- Longitude of the south west corner of the requested area. (-180 <= LON_SW <= 180)
 
         Keyword Arguments:
-            required_data_type {str} -- comma-separated list from .ove _STATION or _ACCESSORY values (default: {None})
+            required_data_type {str} -- comma-separated list from above _STATION or _ACCESSORY values (default: {None})
         """
         self.auth = auth
         self.required_data_type = required_data_type
@@ -212,7 +212,7 @@ class AsyncPublicData(AbstractPublicData):
         self.filtering: bool = filtering
 
     async def async_update(self) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         post_params: dict = {
             **dataclasses.asdict(self.location),
             "filter": self.filtering,
@@ -230,7 +230,7 @@ class AsyncPublicData(AbstractPublicData):
         try:
             self.raw_data = resp_data["body"]
         except (KeyError, TypeError) as exc:
-            raise NoDevice("No public weather data returned by Netatmo server") from .c
+            raise NoDevice("No public weather data returned by Netatmo server") from exc
 
         self.process(resp_data)
 

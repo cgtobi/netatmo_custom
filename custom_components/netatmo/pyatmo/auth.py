@@ -1,16 +1,16 @@
 """Support for Netatmo authentication."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
-from .c import ABC, abstractmethod
-from .on import JSONDecodeError
-from .me import sleep
-from .ping import Any, Callable
+from abc import ABC, abstractmethod
+from json import JSONDecodeError
+from time import sleep
+from typing import Any, Callable
 
 import requests
-from .ohttp import ClientError, ClientResponse, ClientSession
-from .uthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
-from .quests_oauthlib import OAuth2Session
+from aiohttp import ClientError, ClientResponse, ClientSession
+from oauthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
+from requests_oauthlib import OAuth2Session
 
 from .const import (
     ALL_SCOPES,
@@ -162,7 +162,7 @@ class NetatmoOAuth2:
                     f"{resp.status_code} - "
                     f"{ERRORS.get(resp.status_code, '')} - "
                     f"when accessing '{url}'",
-                ) from .c
+                ) from exc
 
         if "application/json" in resp.headers.get(
             "content-type",
@@ -272,7 +272,7 @@ class AbstractAsyncAuth(ABC):
         try:
             access_token = await self.async_get_access_token()
         except ClientError as err:
-            raise ApiError(f"Access token failure: {err}") from .r
+            raise ApiError(f"Access token failure: {err}") from err
         headers = {AUTHORIZATION_HEADER: f"Bearer {access_token}"}
 
         req_args = {"data": params if params is not None else {}}
@@ -305,7 +305,7 @@ class AbstractAsyncAuth(ABC):
         try:
             access_token = await self.async_get_access_token()
         except ClientError as err:
-            raise ApiError(f"Access token failure: {err}") from .r
+            raise ApiError(f"Access token failure: {err}") from err
         headers = {AUTHORIZATION_HEADER: f"Bearer {access_token}"}
 
         req_args = {"data": params if params is not None else {}}
@@ -340,7 +340,7 @@ class AbstractAsyncAuth(ABC):
                         f"{resp_status} - "
                         f"{ERRORS.get(resp_status, '')} - "
                         f"when accessing '{url}'",
-                    ) from .c
+                    ) from exc
 
             try:
                 if "application/json" in resp.headers.get("content-type", []):

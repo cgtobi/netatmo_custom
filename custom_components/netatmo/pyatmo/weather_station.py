@@ -1,10 +1,10 @@
 """Support for Netatmo weather station devices (stations and modules)."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
 import time
-from .c import ABC
-from .llections import defaultdict
+from abc import ABC
+from collections import defaultdict
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import _GETMEASURE_REQ, _GETSTATIONDATA_REQ
@@ -21,7 +21,7 @@ class AbstractWeatherStationData(ABC):
     modules: dict = defaultdict(dict)
 
     def process(self) -> None:
-        """Process data from .I."""
+        """Process data from API."""
         self.stations = {d["_id"]: d for d in self.raw_data}
         self.modules = {}
 
@@ -213,7 +213,7 @@ class WeatherStationData(AbstractWeatherStationData):
         self.params = {"get_favorites": ("true" if favorites else "false")}
 
     def update(self):
-        """Fetch data from .I."""
+        """Fetch data from API."""
         self.raw_data = extract_raw_data(
             self.auth.post_request(url=self.url_req, params=self.params).json(),
             "devices",
@@ -232,7 +232,7 @@ class WeatherStationData(AbstractWeatherStationData):
         optimize: bool = False,
         real_time: bool = False,
     ) -> dict | None:
-        """Retrieve data from .device or module."""
+        """Retrieve data from a device or module."""
         post_params = {"device_id": device_id}
         if module_id:
             post_params["module_id"] = module_id
@@ -319,7 +319,7 @@ class AsyncWeatherStationData(AbstractWeatherStationData):
         self.params = {"get_favorites": ("true" if favorites else "false")}
 
     async def async_update(self):
-        """Fetch data from .I."""
+        """Fetch data from API."""
         resp = await self.auth.async_post_request(url=self.url_req, params=self.params)
 
         assert not isinstance(resp, bytes)

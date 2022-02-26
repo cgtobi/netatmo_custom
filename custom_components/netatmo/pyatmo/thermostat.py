@@ -1,10 +1,10 @@
 """Support for Netatmo energy devices (relays, thermostats and valves)."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
-from .c import ABC
-from .llections import defaultdict
-from .ping import Any
+from abc import ABC
+from collections import defaultdict
+from typing import Any
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
@@ -32,7 +32,7 @@ class AbstractHomeData(ABC):
     setpoint_duration: dict = defaultdict(dict)
 
     def process(self) -> None:
-        """Process data from .I."""
+        """Process data from API."""
         self.homes = {d["id"]: d for d in self.raw_data}
 
         for item in self.raw_data:
@@ -109,7 +109,7 @@ class HomeData(AbstractHomeData):
         self.auth = auth
 
     def update(self) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         resp = self.auth.post_request(url=_GETHOMESDATA_REQ)
 
         self.raw_data = extract_raw_data(resp.json(), "homes")
@@ -137,7 +137,7 @@ class AsyncHomeData(AbstractHomeData):
         self.auth = auth
 
     async def async_update(self):
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         resp = await self.auth.async_post_request(url=_GETHOMESDATA_REQ)
 
         assert not isinstance(resp, bytes)
@@ -166,7 +166,7 @@ class AbstractHomeStatus(ABC):
     relays: dict = defaultdict(dict)
 
     def process(self) -> None:
-        """Process data from .I."""
+        """Process data from API."""
         for room in self.raw_data.get("rooms", []):
             self.rooms[room["id"]] = room
 
@@ -243,7 +243,7 @@ class HomeStatus(AbstractHomeStatus):
         self.home_id = home_id
 
     def update(self) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         resp = self.auth.post_request(
             url=_GETHOMESTATUS_REQ,
             params={"home_id": self.home_id},
@@ -305,7 +305,7 @@ class AsyncHomeStatus(AbstractHomeStatus):
         self.home_id = home_id
 
     async def async_update(self) -> None:
-        """Fetch and process data from .I."""
+        """Fetch and process data from API."""
         resp = await self.auth.async_post_request(
             url=_GETHOMESTATUS_REQ,
             params={"home_id": self.home_id},

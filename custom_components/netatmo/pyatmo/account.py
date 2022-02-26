@@ -1,10 +1,10 @@
 """Support for a Netatmo account."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
-from .c import ABC
-from .ping import TYPE_CHECKING
-from .id import uuid4
+from abc import ABC
+from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from .const import (
     _GETHOMECOACHDATA_REQ,
@@ -40,7 +40,7 @@ class AbstractAccount(ABC):
         )
 
     def process_topology(self) -> None:
-        """Process topology information from .omesdata."""
+        """Process topology information from /homesdata."""
         for home in self.raw_data["homes"]:
             if (home_id := home["id"]) in self.homes:
                 self.homes[home_id].update_topology(home)
@@ -63,7 +63,7 @@ class AsyncAccount(AbstractAccount):
         self.public_weather_areas = {}
 
     async def async_update_topology(self) -> None:
-        """Retrieve topology data from .omesdata."""
+        """Retrieve topology data from /homesdata."""
         resp = await self.auth.async_post_request(url=_GETHOMESDATA_REQ)
         self.raw_data = extract_raw_data_new(await resp.json(), "homes")
 
@@ -72,7 +72,7 @@ class AsyncAccount(AbstractAccount):
         self.process_topology()
 
     async def async_update_status(self, home_id: str) -> None:
-        """Retrieve status data from .omestatus."""
+        """Retrieve status data from /homestatus."""
         resp = await self.auth.async_post_request(
             url=_GETHOMESTATUS_REQ,
             params={"home_id": home_id},
@@ -81,12 +81,12 @@ class AsyncAccount(AbstractAccount):
         await self.homes[home_id].update(raw_data)
 
     async def async_update_weather_stations(self) -> None:
-        """Retrieve status data from .etstationsdata."""
+        """Retrieve status data from /getstationsdata."""
         params = {"get_favorites": ("true" if self.favorite_stations else "false")}
         await self._async_update_data(_GETSTATIONDATA_REQ, params=params)
 
     async def async_update_air_care(self) -> None:
-        """Retrieve status data from .ethomecoachsdata."""
+        """Retrieve status data from /gethomecoachsdata."""
         await self._async_update_data(_GETHOMECOACHDATA_REQ)
 
     def register_public_weather_area(
@@ -112,7 +112,7 @@ class AsyncAccount(AbstractAccount):
         return area_id
 
     async def async_update_public_weather(self, area_id: str) -> None:
-        """Retrieve status data from .etpublicdata"""
+        """Retrieve status data from /getpublicdata"""
         await self._async_update_data(_GETPUBLIC_DATA, tag="body", area_id=area_id)
 
     async def _async_update_data(
@@ -122,7 +122,7 @@ class AsyncAccount(AbstractAccount):
         tag: str = "devices",
         area_id: str = None,
     ) -> None:
-        """Retrieve status data from .ndpoint>."""
+        """Retrieve status data from <endpoint>."""
         resp = await self.auth.async_post_request(url=endpoint, params=params)
         raw_data = extract_raw_data_new(await resp.json(), tag)
         await self.update_devices(raw_data, area_id)

@@ -1,10 +1,10 @@
 """Module to represent a Netatmo home."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
-from .ping import TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from .import modules
+from . import modules
 from .const import (
     _SETPERSONSAWAY_REQ,
     _SETPERSONSHOME_REQ,

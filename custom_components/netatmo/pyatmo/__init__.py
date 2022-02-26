@@ -1,5 +1,5 @@
 """Expose submodules."""
-from .import modules
+from . import modules
 from .account import AsyncAccount
 from .auth import AbstractAsyncAuth, ClientAuth, NetatmoOAuth2
 from .camera import AsyncCameraData, CameraData

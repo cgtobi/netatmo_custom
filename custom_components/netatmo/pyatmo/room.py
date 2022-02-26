@@ -1,9 +1,9 @@
 """Module to represent a Netatmo room."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
-from .taclasses import dataclass
-from .ping import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .const import _SETROOMTHERMPOINT_REQ, FROSTGUARD, HOME, MANUAL
 from .modules.base_class import NetatmoBase

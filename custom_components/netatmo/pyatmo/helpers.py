@@ -1,11 +1,11 @@
 """Collection of helper functions."""
-from .future__ import annotations
+from __future__ import annotations
 
 import logging
 import time
-from .lendar import timegm
-from .tetime import datetime
-from .ping import Any
+from calendar import timegm
+from datetime import datetime
+from typing import Any
 
 from .exceptions import NoDevice
 
@@ -43,7 +43,7 @@ def fix_id(raw_data: dict) -> dict:
 
 
 def extract_raw_data(resp: Any, tag: str) -> dict:
-    """Extract raw data from .rver response."""
+    """Extract raw data from server response."""
     if (
         resp is None
         or "body" not in resp
@@ -61,7 +61,7 @@ def extract_raw_data(resp: Any, tag: str) -> dict:
 
 
 def extract_raw_data_new(resp: Any, tag: str) -> dict:
-    """Extract raw data from .rver response."""
+    """Extract raw data from server response."""
     raw_data: dict | list = {}
 
     if tag == "body":
