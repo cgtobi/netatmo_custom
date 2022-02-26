@@ -1,5 +1,13 @@
 {
   "name": "Netatmo Component",
   "render_readme": true,
-  "domains": ["camera", "climate", "light", "select", "sensor"]
+  "domains": [
+    "camera",
+    "climate",
+    "light",
+    "select",
+    "sensor",
+    "cover",
+    "switch"
+  ]
 }

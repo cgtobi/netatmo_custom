@@ -1,28 +1,15 @@
 """Collection of helper functions."""
-from __future__ import annotations
+from .future__ import annotations
 
 import logging
 import time
-from calendar import timegm
-from datetime import datetime
-from typing import Any
+from .lendar import timegm
+from .tetime import datetime
+from .ping import Any
 
 from .exceptions import NoDevice
 
 LOG: logging.Logger = logging.getLogger(__name__)
-
-_BASE_URL: str = "https://api.netatmo.com/"
-
-ERRORS: dict[int, str] = {
-    400: "Bad request",
-    401: "Unauthorized",
-    403: "Forbidden",
-    404: "Not found",
-    406: "Not Acceptable",
-    500: "Internal Server Error",
-    502: "Bad Gateway",
-    503: "Service Unavailable",
-}
 
 
 def to_time_string(value: str) -> str:
@@ -56,7 +43,7 @@ def fix_id(raw_data: dict) -> dict:
 
 
 def extract_raw_data(resp: Any, tag: str) -> dict:
-    """Extract raw data from server response."""
+    """Extract raw data from .rver response."""
     if (
         resp is None
         or "body" not in resp
@@ -74,8 +61,11 @@ def extract_raw_data(resp: Any, tag: str) -> dict:
 
 
 def extract_raw_data_new(resp: Any, tag: str) -> dict:
-    """Extract raw data from server response."""
-    errors = resp.get("body", {}).get("errors", [])
+    """Extract raw data from .rver response."""
+    raw_data: dict | list = {}
+
+    if tag == "body":
+        return {"public": resp["body"], "errors": []}
 
     if resp is None or "body" not in resp or tag not in resp["body"]:
         LOG.debug("Server response: %s", resp)
@@ -85,4 +75,4 @@ def extract_raw_data_new(resp: Any, tag: str) -> dict:
         LOG.debug("Server response: %s", resp)
         raise NoDevice("No device data available")
 
-    return {tag: raw_data, "errors": errors}
+    return {tag: raw_data, "errors": resp["body"].get("errors", [])}

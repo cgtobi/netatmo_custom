@@ -1,47 +1,29 @@
 """Support for Netatmo authentication."""
-from __future__ import annotations
+from .future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
-from json import JSONDecodeError
-from time import sleep
-from typing import Any, Callable
+from .c import ABC, abstractmethod
+from .on import JSONDecodeError
+from .me import sleep
+from .ping import Any, Callable
 
 import requests
-from aiohttp import ClientError, ClientResponse, ClientSession
-from oauthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
-from requests_oauthlib import OAuth2Session
+from .ohttp import ClientError, ClientResponse, ClientSession
+from .uthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
+from .quests_oauthlib import OAuth2Session
 
-from pyatmo.exceptions import ApiError
-from pyatmo.helpers import _BASE_URL, ERRORS
+from .const import (
+    ALL_SCOPES,
+    AUTH_REQ,
+    AUTH_URL,
+    AUTHORIZATION_HEADER,
+    ERRORS,
+    WEBHOOK_URL_ADD,
+    WEBHOOK_URL_DROP,
+)
+from .exceptions import ApiError
 
 LOG = logging.getLogger(__name__)
-
-# Common definitions
-AUTH_REQ_ENDPOINT = "oauth2/token"
-AUTH_REQ = _BASE_URL + AUTH_REQ_ENDPOINT
-AUTH_URL_ENDPOINT = "oauth2/authorize"
-AUTH_URL = _BASE_URL + AUTH_URL_ENDPOINT
-WEBHOOK_URL_ADD = _BASE_URL + "api/addwebhook"
-WEBHOOK_URL_DROP = _BASE_URL + "api/dropwebhook"
-
-AUTHORIZATION_HEADER = "Authorization"
-
-
-# Possible scops
-ALL_SCOPES = [
-    "read_station",
-    "read_camera",
-    "access_camera",
-    "write_camera",
-    "read_presence",
-    "access_presence",
-    "write_presence",
-    "read_homecoach",
-    "read_smokedetector",
-    "read_thermostat",
-    "write_thermostat",
-]
 
 
 class NetatmoOAuth2:
@@ -180,16 +162,12 @@ class NetatmoOAuth2:
                     f"{resp.status_code} - "
                     f"{ERRORS.get(resp.status_code, '')} - "
                     f"when accessing '{url}'",
-                ) from exc
+                ) from .c
 
-        if (
-            "application/json"
-            in resp.headers.get(
-                "content-type",
-                [],
-            )
-            or resp.content not in [b"", b"None"]
-        ):
+        if "application/json" in resp.headers.get(
+            "content-type",
+            [],
+        ) or resp.content not in [b"", b"None"]:
             return resp
 
         return requests.Response()
@@ -294,7 +272,7 @@ class AbstractAsyncAuth(ABC):
         try:
             access_token = await self.async_get_access_token()
         except ClientError as err:
-            raise ApiError(f"Access token failure: {err}") from err
+            raise ApiError(f"Access token failure: {err}") from .r
         headers = {AUTHORIZATION_HEADER: f"Bearer {access_token}"}
 
         req_args = {"data": params if params is not None else {}}
@@ -327,7 +305,7 @@ class AbstractAsyncAuth(ABC):
         try:
             access_token = await self.async_get_access_token()
         except ClientError as err:
-            raise ApiError(f"Access token failure: {err}") from err
+            raise ApiError(f"Access token failure: {err}") from .r
         headers = {AUTHORIZATION_HEADER: f"Bearer {access_token}"}
 
         req_args = {"data": params if params is not None else {}}
@@ -362,7 +340,7 @@ class AbstractAsyncAuth(ABC):
                         f"{resp_status} - "
                         f"{ERRORS.get(resp_status, '')} - "
                         f"when accessing '{url}'",
-                    ) from exc
+                    ) from .c
 
             try:
                 if "application/json" in resp.headers.get("content-type", []):

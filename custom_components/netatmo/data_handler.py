@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from itertools import islice
 import logging
 from time import time
@@ -29,30 +29,27 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-CAMERA_DATA_CLASS_NAME = "AsyncCameraData"
-WEATHERSTATION_DATA_CLASS_NAME = "AsyncWeatherStationData"
-HOMECOACH_DATA_CLASS_NAME = "AsyncHomeCoachData"
-CLIMATE_TOPOLOGY_CLASS_NAME = "AsyncClimateTopology"
-CLIMATE_STATE_CLASS_NAME = "AsyncClimate"
-PUBLICDATA_DATA_CLASS_NAME = "AsyncPublicData"
+ACCOUNT = "account"
+HOME = "home"
+WEATHER = "weather"
+AIR_CARE = "air_care"
+PUBLIC = "public"
 
-DATA_CLASSES = {
-    WEATHERSTATION_DATA_CLASS_NAME: pyatmo.AsyncWeatherStationData,
-    HOMECOACH_DATA_CLASS_NAME: pyatmo.AsyncHomeCoachData,
-    CAMERA_DATA_CLASS_NAME: pyatmo.AsyncCameraData,
-    CLIMATE_TOPOLOGY_CLASS_NAME: pyatmo.AsyncClimateTopology,
-    CLIMATE_STATE_CLASS_NAME: pyatmo.AsyncClimate,
-    PUBLICDATA_DATA_CLASS_NAME: pyatmo.AsyncPublicData,
+PUBLISHERS = {
+    "account": "async_update_topology",
+    "home": "async_update_status",
+    "weather": "async_update_weather_stations",
+    "air_care": "async_update_air_care",
+    "public": "async_update_public_weather",
 }
 
 BATCH_SIZE = 3
 DEFAULT_INTERVALS = {
-    CLIMATE_TOPOLOGY_CLASS_NAME: 3600,
-    CLIMATE_STATE_CLASS_NAME: 300,
-    CAMERA_DATA_CLASS_NAME: 900,
-    WEATHERSTATION_DATA_CLASS_NAME: 600,
-    HOMECOACH_DATA_CLASS_NAME: 300,
-    PUBLICDATA_DATA_CLASS_NAME: 600,
+    ACCOUNT: 3600,
+    HOME: 300,
+    WEATHER: 600,
+    AIR_CARE: 300,
+    PUBLIC: 600,
 }
 SCAN_INTERVAL = 60
 
@@ -61,37 +58,42 @@ SCAN_INTERVAL = 60
 class NetatmoDevice:
     """Netatmo device class."""
 
-    device_id: str
-    entity: pyatmo.climate.NetatmoModule
+    data_handler: NetatmoDataHandler
+    device: pyatmo.NetatmoModule
+    parent_id: str
     state_class_name: str
 
 
 @dataclass
-class NetatmoDataClass:
+class NetatmoPublisher:
     """Class for keeping track of Netatmo data class metadata."""
 
     name: str
     interval: int
     next_scan: float
-    subscriptions: list[CALLBACK_TYPE]
+    subscriptions: list[CALLBACK_TYPE | None]
+    method: str
+    kwargs: dict
 
 
 class NetatmoDataHandler:
     """Manages the Netatmo data handling."""
+
+    account: pyatmo.AsyncAccount
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize self."""
         self.hass = hass
         self.config_entry = config_entry
         self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
-        self.data_classes: dict = {}
+        self.publisher: dict = {}
         self.data: dict = {}
         self._queue: deque = deque()
         self._webhook: bool = False
 
     async def async_setup(self) -> None:
         """Set up the Netatmo data handler."""
-
+        print("""Set up the Netatmo data handler.""")
         async_track_time_interval(
             self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
         )
@@ -104,7 +106,11 @@ class NetatmoDataHandler:
             )
         )
 
-    async def async_update(self, event_time: timedelta) -> None:
+        self.account = pyatmo.AsyncAccount(self._auth)
+
+        await self.subscribe(ACCOUNT, ACCOUNT, None)
+
+    async def async_update(self, event_time: datetime) -> None:
         """
         Update device.
 
@@ -116,19 +122,18 @@ class NetatmoDataHandler:
                 continue
 
             if data_class_name := data_class.name:
-                self.data_classes[data_class_name].next_scan = (
-                    time() + data_class.interval
-                )
+                self.publisher[data_class_name].next_scan = time() + data_class.interval
 
                 await self.async_fetch_data(data_class_name)
+                print("Update device.", data_class_name)
 
         self._queue.rotate(BATCH_SIZE)
 
     @callback
     def async_force_update(self, data_class_entry: str) -> None:
         """Prioritize data retrieval for given data class entry."""
-        self.data_classes[data_class_entry].next_scan = time()
-        self._queue.rotate(-(self._queue.index(self.data_classes[data_class_entry])))
+        self.publisher[data_class_entry].next_scan = time()
+        self._queue.rotate(-(self._queue.index(self.publisher[data_class_entry])))
 
     async def handle_event(self, event: dict) -> None:
         """Handle webhook events."""
@@ -142,19 +147,18 @@ class NetatmoDataHandler:
 
         elif event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_NACAMERA_CONNECTION:
             _LOGGER.debug("%s camera reconnected", MANUFACTURER)
-            self.async_force_update(CAMERA_DATA_CLASS_NAME)
+            self.async_force_update(ACCOUNT)
 
-    async def async_fetch_data(self, data_class_entry: str) -> None:
+    async def async_fetch_data(self, signal_name: str) -> None:
         """Fetch data and notify."""
-        if self.data[data_class_entry] is None:
-            return
-
         try:
-            await self.data[data_class_entry].async_update()
+            await getattr(self.account, self.publisher[signal_name].method)(
+                **self.publisher[signal_name].kwargs
+            )
 
         except pyatmo.NoDevice as err:
             _LOGGER.debug(err)
-            self.data[data_class_entry] = None
+            self.data[signal_name] = None
 
         except pyatmo.ApiError as err:
             _LOGGER.debug(err)
@@ -163,52 +167,53 @@ class NetatmoDataHandler:
             _LOGGER.debug(err)
             return
 
-        for update_callback in self.data_classes[data_class_entry].subscriptions:
+        for update_callback in self.publisher[signal_name].subscriptions:
             if update_callback:
                 update_callback()
 
-    async def register_data_class(
+    async def subscribe(
         self,
-        data_class_name: str,
-        data_class_entry: str,
-        update_callback: CALLBACK_TYPE,
+        publisher: str,
+        signal_name: str,
+        update_callback: CALLBACK_TYPE | None,
         **kwargs: Any,
     ) -> None:
-        """Register data class."""
-        if data_class_entry in self.data_classes:
-            if update_callback not in self.data_classes[data_class_entry].subscriptions:
-                self.data_classes[data_class_entry].subscriptions.append(
-                    update_callback
-                )
+        """Subscribe to publisher."""
+        print("""Subscribe to publisher.""", publisher, signal_name)
+        if signal_name in self.publisher:
+            if update_callback not in self.publisher[signal_name].subscriptions:
+                self.publisher[signal_name].subscriptions.append(update_callback)
             return
 
-        self.data_classes[data_class_entry] = NetatmoDataClass(
-            name=data_class_entry,
-            interval=DEFAULT_INTERVALS[data_class_name],
-            next_scan=time() + DEFAULT_INTERVALS[data_class_name],
+        self.publisher[signal_name] = NetatmoPublisher(
+            name=signal_name,
+            interval=DEFAULT_INTERVALS[publisher],
+            next_scan=time() + DEFAULT_INTERVALS[publisher],
             subscriptions=[update_callback],
+            method=PUBLISHERS[publisher],
+            kwargs=kwargs,
         )
 
-        self.data[data_class_entry] = DATA_CLASSES[data_class_name](
-            self._auth, **kwargs
-        )
+        try:
+            await self.async_fetch_data(signal_name)
+        except KeyError:
+            self.publisher.pop(signal_name)
+            raise
 
-        await self.async_fetch_data(data_class_entry)
+        self._queue.append(self.publisher[signal_name])
+        _LOGGER.debug("Publisher %s added", signal_name)
 
-        self._queue.append(self.data_classes[data_class_entry])
-        _LOGGER.debug("Data class %s added", data_class_entry)
-
-    async def unregister_data_class(
-        self, data_class_entry: str, update_callback: CALLBACK_TYPE | None
+    async def unsubscribe(
+        self, signal_name: str, update_callback: CALLBACK_TYPE | None
     ) -> None:
-        """Unregister data class."""
-        self.data_classes[data_class_entry].subscriptions.remove(update_callback)
+        """Unsubscribe from publisher."""
+        self.publisher[signal_name].subscriptions.remove(update_callback)
 
-        if not self.data_classes[data_class_entry].subscriptions:
-            self._queue.remove(self.data_classes[data_class_entry])
-            self.data_classes.pop(data_class_entry)
-            self.data.pop(data_class_entry)
-            _LOGGER.debug("Data class %s removed", data_class_entry)
+        if not self.publisher[signal_name].subscriptions:
+            self._queue.remove(self.publisher[signal_name])
+            self.publisher.pop(signal_name)
+            self.data.pop(signal_name)
+            _LOGGER.debug("Publisher %s removed", signal_name)
 
     @property
     def webhook(self) -> bool:

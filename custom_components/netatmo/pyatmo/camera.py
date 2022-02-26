@@ -1,25 +1,26 @@
 """Support for Netatmo security devices (cameras, smoke detectors, sirens, window sensors, events and persons)."""
-from __future__ import annotations
+from .future__ import annotations
 
 import imghdr
 import time
-from abc import ABC
-from collections import defaultdict
-from typing import Any
+from .c import ABC
+from .llections import defaultdict
+from .ping import Any
 
 import aiohttp
-from requests.exceptions import ReadTimeout
+from .quests.exceptions import ReadTimeout
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
+from .const import (
+    _GETCAMERAPICTURE_REQ,
+    _GETEVENTSUNTIL_REQ,
+    _GETHOMEDATA_REQ,
+    _SETPERSONSAWAY_REQ,
+    _SETPERSONSHOME_REQ,
+    _SETSTATE_REQ,
+)
 from .exceptions import ApiError, NoDevice
-from .helpers import _BASE_URL, LOG, extract_raw_data
-
-_GETHOMEDATA_REQ = _BASE_URL + "api/gethomedata"
-_GETCAMERAPICTURE_REQ = _BASE_URL + "api/getcamerapicture"
-_GETEVENTSUNTIL_REQ = _BASE_URL + "api/geteventsuntil"
-_SETPERSONSAWAY_REQ = _BASE_URL + "api/setpersonsaway"
-_SETPERSONSHOME_REQ = _BASE_URL + "api/setpersonshome"
-_SETSTATE_REQ = _BASE_URL + "api/setstate"
+from .helpers import LOG, extract_raw_data
 
 
 class AbstractCameraData(ABC):
@@ -38,7 +39,7 @@ class AbstractCameraData(ABC):
     types: dict = defaultdict(dict)
 
     def process(self) -> None:
-        """Process data from API."""
+        """Process data from .I."""
         self.homes = {d["id"]: d for d in self.raw_data}
 
         for item in self.raw_data:
@@ -455,7 +456,7 @@ class CameraData(AbstractCameraData):
         self.auth = auth
 
     def update(self, events: int = 30) -> None:
-        """Fetch and process data from API."""
+        """Fetch and process data from .I."""
         resp = self.auth.post_request(url=_GETHOMEDATA_REQ, params={"size": events})
 
         self.raw_data = extract_raw_data(resp.json(), "homes")
@@ -563,7 +564,7 @@ class CameraData(AbstractCameraData):
         image_id: str,
         key: str,
     ) -> tuple[bytes, str | None]:
-        """Download a specific image (of an event or user face) from the camera."""
+        """Download a specific image (of an event or user face) from .e camera."""
         post_params = {"image_id": image_id, "key": key}
         resp = self.auth.post_request(
             url=_GETCAMERAPICTURE_REQ,
@@ -635,7 +636,7 @@ class AsyncCameraData(AbstractCameraData):
         self.auth = auth
 
     async def async_update(self, events: int = 30) -> None:
-        """Fetch and process data from API."""
+        """Fetch and process data from .I."""
         resp = await self.auth.async_post_request(
             url=_GETHOMEDATA_REQ,
             params={"size": events},
@@ -765,7 +766,7 @@ class AsyncCameraData(AbstractCameraData):
         )
 
     async def async_get_live_snapshot(self, camera_id: str) -> bytes | None:
-        """Retrieve live snapshot from camera."""
+        """Retrieve live snapshot from .mera."""
         local, vpn = self.camera_urls(camera_id)
         if not local and not vpn:
             return None
@@ -784,7 +785,7 @@ class AsyncCameraData(AbstractCameraData):
         image_id: str,
         key: str,
     ) -> tuple[bytes, str | None]:
-        """Download a specific image (of an event or user face) from the camera."""
+        """Download a specific image (of an event or user face) from .e camera."""
         post_params = {"image_id": image_id, "key": key}
         resp = await self.auth.async_get_image(
             url=_GETCAMERAPICTURE_REQ,

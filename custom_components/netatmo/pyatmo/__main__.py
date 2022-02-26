@@ -1,13 +1,13 @@
 import os
 import sys
 
-from pyatmo.auth import ALL_SCOPES, ClientAuth
-from pyatmo.camera import CameraData
-from pyatmo.exceptions import NoDevice
-from pyatmo.home_coach import HomeCoachData
-from pyatmo.public_data import PublicData
-from pyatmo.thermostat import HomeData
-from pyatmo.weather_station import WeatherStationData
+from .auth import ALL_SCOPES, ClientAuth
+from .camera import CameraData
+from .exceptions import NoDevice
+from .home_coach import HomeCoachData
+from .public_data import PublicData
+from .thermostat import HomeData
+from .weather_station import WeatherStationData
 
 LON_NE = "6.221652"
 LAT_NE = "46.610870"
