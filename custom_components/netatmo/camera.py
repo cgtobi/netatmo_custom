@@ -105,9 +105,7 @@ class NetatmoCamera(NetatmoBase, Camera):
     """Representation of a Netatmo camera."""
 
     def __init__(
-        self,
-        data_handler: NetatmoDataHandler,
-        camera: NaModules.NOC | NaModules.NACamera | NaModules.NDB,
+        self, data_handler: NetatmoDataHandler, camera: NaModules.Camera
     ) -> None:
         """Set up for access to the Netatmo camera images."""
         Camera.__init__(self)

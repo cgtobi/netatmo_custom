@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import NamedTuple, cast
+from typing import cast
 
 from . import pyatmo
 from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
@@ -147,7 +147,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         icon="mdi:weather-rainy",
     ),
     NetatmoSensorEntityDescription(
-        key="battery_percent",
+        key="battery",
         name="Battery Percent",
         entity_registry_enabled_default=True,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -229,48 +229,6 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
 )
 SENSOR_TYPES_KEYS = [desc.key for desc in SENSOR_TYPES]
 
-MODULE_TYPE_OUTDOOR = "NAModule1"
-MODULE_TYPE_WIND = "NAModule2"
-MODULE_TYPE_RAIN = "NAModule3"
-MODULE_TYPE_INDOOR = "NAModule4"
-
-
-class BatteryData(NamedTuple):
-    """Metadata for a batter."""
-
-    full: int
-    high: int
-    medium: int
-    low: int
-
-
-BATTERY_VALUES = {
-    MODULE_TYPE_WIND: BatteryData(
-        full=5590,
-        high=5180,
-        medium=4770,
-        low=4360,
-    ),
-    MODULE_TYPE_RAIN: BatteryData(
-        full=5500,
-        high=5000,
-        medium=4500,
-        low=4000,
-    ),
-    MODULE_TYPE_INDOOR: BatteryData(
-        full=5500,
-        high=5280,
-        medium=4920,
-        low=4560,
-    ),
-    MODULE_TYPE_OUTDOOR: BatteryData(
-        full=5500,
-        high=5000,
-        medium=4500,
-        low=4000,
-    ),
-}
-
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -282,6 +240,16 @@ async def async_setup_entry(
 
     if not account_topology or account_topology.raw_data == {}:
         raise PlatformNotReady
+
+    @callback
+    def _create_entity(netatmo_device: NetatmoDevice) -> None:
+        entity = NetatmoClimateBatterySensor(netatmo_device)
+        _LOGGER.debug("Adding climate battery sensor %s", entity)
+        async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_BATTERY, _create_entity)
+    )
 
     entities = []
     for home in account_topology.homes.values():
@@ -365,16 +333,6 @@ async def async_setup_entry(
 
     async_dispatcher_connect(
         hass, f"signal-{DOMAIN}-public-update-{entry.entry_id}", add_public_entities
-    )
-
-    @callback
-    def _create_entity(netatmo_device: NetatmoDevice) -> None:
-        entity = NetatmoClimateBatterySensor(netatmo_device)
-        _LOGGER.debug("Adding climate battery sensor %s", entity)
-        async_add_entities([entity])
-
-    entry.async_on_unload(
-        async_dispatcher_connect(hass, NETATMO_CREATE_BATTERY, _create_entity)
     )
 
     await add_public_entities(False)
@@ -477,7 +435,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
         """Initialize the sensor."""
         super().__init__(netatmo_device.data_handler)
         self.entity_description = NetatmoSensorEntityDescription(
-            key="battery_percent",
+            key="battery",
             name="Battery Percent",
             entity_registry_enabled_default=True,
             entity_category=EntityCategory.DIAGNOSTIC,
@@ -521,27 +479,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
             return
 
         self._attr_available = True
-        self._attr_native_value = self._process_battery_state()
-
-    def _process_battery_state(self) -> int:
-        """Construct room status."""
-        if battery_state := self._module.battery_state:
-            return process_battery_percentage(battery_state)
-
-        return 0
-
-
-def process_battery_percentage(data: str) -> int:
-    """Process battery data and return percent (int) for display."""
-    mapping = {
-        "max": 100,
-        "full": 90,
-        "high": 75,
-        "medium": 50,
-        "low": 25,
-        "very low": 10,
-    }
-    return mapping[data]
+        self._attr_native_value = self._module.battery
 
 
 def fix_angle(angle: int) -> int:
@@ -570,21 +508,6 @@ def process_angle(angle: int) -> str:
     if angle >= 30:
         return "NE"
     return "N"
-
-
-def process_battery(data: int, model: str) -> str:
-    """Process battery data and return string for display."""
-    battery_data = BATTERY_VALUES[model]
-
-    if data >= battery_data.full:
-        return "Full"
-    if data >= battery_data.high:
-        return "High"
-    if data >= battery_data.medium:
-        return "Medium"
-    if data >= battery_data.low:
-        return "Low"
-    return "Very Low"
 
 
 def process_health(health: int) -> str:
