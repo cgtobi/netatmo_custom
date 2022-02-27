@@ -20,9 +20,8 @@ from ..const import (
 from ..modules.module import (
     BatteryMixin,
     BoilerMixin,
-    CameraMixin,
+    Camera,
     CO2Mixin,
-    EventMixin,
     FirmwareMixin,
     FloodlightMixin,
     HealthIndexMixin,
@@ -64,26 +63,15 @@ class OTM(FirmwareMixin, RfMixin, BatteryMixin, BoilerMixin, Module):
     ...
 
 
-class NetatmoCamera(
-    FirmwareMixin,
-    MonitoringMixin,
-    EventMixin,
-    CameraMixin,
-    WifiMixin,
-    Module,
-):
+class NACamera(Camera):
     ...
 
 
-class NACamera(NetatmoCamera):
+class NOC(FloodlightMixin, Camera):
     ...
 
 
-class NOC(FloodlightMixin, NetatmoCamera):
-    ...
-
-
-class NDB(NetatmoCamera):
+class NDB(Camera):
     ...
 
 
@@ -100,19 +88,34 @@ class NAMain(
     ...
 
 
-class NAModule1(TemperatureMixin, HumidityMixin, RfMixin, FirmwareMixin, Module):
+class NAModule1(
+    TemperatureMixin,
+    HumidityMixin,
+    RfMixin,
+    FirmwareMixin,
+    BatteryMixin,
+    Module,
+):
     ...
 
 
-class NAModule2(WindMixin, RfMixin, FirmwareMixin, Module):
+class NAModule2(WindMixin, RfMixin, FirmwareMixin, BatteryMixin, Module):
     ...
 
 
-class NAModule3(RainMixin, RfMixin, FirmwareMixin, Module):
+class NAModule3(RainMixin, RfMixin, FirmwareMixin, BatteryMixin, Module):
     ...
 
 
-class NAModule4(TemperatureMixin, RfMixin, FirmwareMixin, Module):
+class NAModule4(
+    TemperatureMixin,
+    CO2Mixin,
+    HumidityMixin,
+    RfMixin,
+    FirmwareMixin,
+    BatteryMixin,
+    Module,
+):
     ...
 
 
