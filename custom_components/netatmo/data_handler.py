@@ -35,6 +35,7 @@ HOME = "home"
 WEATHER = "weather"
 AIR_CARE = "air_care"
 PUBLIC = "public"
+EVENT = "event"
 
 PUBLISHERS = {
     ACCOUNT: "async_update_topology",
@@ -42,6 +43,7 @@ PUBLISHERS = {
     WEATHER: "async_update_weather_stations",
     AIR_CARE: "async_update_air_care",
     PUBLIC: "async_update_public_weather",
+    EVENT: "async_update_events",
 }
 
 BATCH_SIZE = 3
@@ -51,6 +53,7 @@ DEFAULT_INTERVALS = {
     WEATHER: 600,
     AIR_CARE: 300,
     PUBLIC: 600,
+    EVENT: 600,
 }
 SCAN_INTERVAL = 60
 

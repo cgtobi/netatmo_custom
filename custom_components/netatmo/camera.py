@@ -21,13 +21,14 @@ from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (  # DATA_EVENTS,
+from .const import (
     ATTR_CAMERA_LIGHT_MODE,
     ATTR_PERSON,
     ATTR_PERSONS,
     CAMERA_LIGHT_MODES,
     CONF_URL_SECURITY,
     DATA_CAMERAS,
+    DATA_EVENTS,
     DATA_HANDLER,
     DATA_PERSONS,
     DOMAIN,
@@ -42,7 +43,7 @@ from .const import (  # DATA_EVENTS,
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
 )
-from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
+from .data_handler import EVENT, HOME, SIGNAL_NAME, NetatmoDataHandler
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,9 +64,8 @@ async def async_setup_entry(
 
     entities = []
     for home_id in account_topology.homes:
-        signal_name = f"{HOME}-{home_id}"
-
-        await data_handler.subscribe(HOME, signal_name, None, home_id=home_id)
+        await data_handler.subscribe(HOME, f"{HOME}-{home_id}", None, home_id=home_id)
+        await data_handler.subscribe(EVENT, f"{EVENT}-{home_id}", None, home_id=home_id)
 
         for camera in account_topology.homes[home_id].modules.values():
             if camera.device_category is NetatmoDeviceCategory.camera:
@@ -136,6 +136,11 @@ class NetatmoCamera(NetatmoBase, Camera):
             [
                 {
                     "name": HOME,
+                    "home_id": self._home_id,
+                    SIGNAL_NAME: self._signal_name,
+                },
+                {
+                    "name": EVENT,
                     "home_id": self._home_id,
                     SIGNAL_NAME: self._signal_name,
                 },
@@ -243,14 +248,9 @@ class NetatmoCamera(NetatmoBase, Camera):
             self._attr_is_streaming = self._camera.monitoring
             self._attr_motion_detection_enabled = self._camera.monitoring
 
-        # if self._model == "NACamera":  # Smart Indoor Camera
-        #     self.hass.data[DOMAIN][DATA_EVENTS][self._id] = self.process_events(
-        #         self._data.events.get(self._id, {})
-        #     )
-        # elif self._model == "NOC":  # Smart Outdoor Camera
-        #     self.hass.data[DOMAIN][DATA_EVENTS][self._id] = self.process_events(
-        #         self._data.outdoor_events.get(self._id, {})
-        #     )
+        self.hass.data[DOMAIN][DATA_EVENTS][self._id] = self.process_events(
+            self._camera.events
+        )
 
         self._attr_extra_state_attributes.update(
             {
@@ -265,20 +265,26 @@ class NetatmoCamera(NetatmoBase, Camera):
             }
         )
 
-    def process_events(self, events: dict) -> dict:
+    def process_events(self, event_list: list) -> dict:
         """Add meta data to events."""
-        for event in events.values():
-            if "video_id" not in event:
+        events = {}
+        for event in event_list:
+            if not (video_id := getattr(event, "video_id")):
                 continue
-            if self._is_local:
-                event[
-                    "media_url"
-                ] = f"{self._localurl}/vod/{event['video_id']}/files/{self._quality}/index.m3u8"
-            else:
-                event[
-                    "media_url"
-                ] = f"{self._vpnurl}/vod/{event['video_id']}/files/{self._quality}/index.m3u8"
+            event_data = event.__dict__
+            if "subevents" in event_data:
+                event_data["subevents"] = [
+                    event.__dict__ for event in event_data["subevents"]
+                ]
+            event_data["media_url"] = self.get_video_url(video_id)
+            events[event.event_time] = event_data
         return events
+
+    def get_video_url(self, video_id: str) -> str:
+        """Get video url."""
+        if self._is_local:
+            return f"{self._localurl}/vod/{video_id}/files/{self._quality}/index.m3u8"
+        return f"{self._vpnurl}/vod/{video_id}/files/{self._quality}/index.m3u8"
 
     def fetch_person_ids(self, persons: list[str | None]) -> list[str]:
         """Fetch matching person ids for give list of persons."""
