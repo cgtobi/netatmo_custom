@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from . import pyatmo
+from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
@@ -32,21 +33,24 @@ async def async_setup_entry(
     """Set up the Netatmo energy platform schedule selector."""
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    climate_topology = data_handler.account
+    account_topology = data_handler.account
 
-    if not climate_topology or climate_topology.raw_data == {}:
+    if not account_topology or account_topology.raw_data == {}:
         raise PlatformNotReady
 
     entities = []
-    for home in climate_topology.homes.values():
+    for home in account_topology.homes.values():
+        if NetatmoDeviceCategory.climate not in [
+            next(iter(x)) for x in [room.features for room in home.rooms.values()] if x
+        ]:
+            continue
+
         signal_name = f"{HOME}-{home.entity_id}"
 
         await data_handler.subscribe(HOME, signal_name, None, home_id=home.entity_id)
 
         if (climate_state := data_handler.account) is None:
             continue
-
-        # climate_topology.register_handler(home_id, climate_state.process_topology)
 
         hass.data[DOMAIN][DATA_SCHEDULES][home.entity_id] = climate_state.homes[
             home.entity_id
@@ -60,16 +64,6 @@ async def async_setup_entry(
             )
         )
 
-    # entities = [
-    #     NetatmoScheduleSelect(
-    #         data_handler,
-    #         home,
-    #         [schedule.name for schedule in schedules.values()],
-    #     )
-    #     for home_id, schedules in hass.data[DOMAIN][DATA_SCHEDULES].items()
-    #     if schedules
-    # ]
-
     _LOGGER.debug("Adding climate schedule select entities %s", entities)
     async_add_entities(entities, True)
 
@@ -78,7 +72,7 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
     """Representation a Netatmo thermostat schedule selector."""
 
     def __init__(
-        self, data_handler: NetatmoDataHandler, home: pyatmo.NetatmoHome, options: list
+        self, data_handler: NetatmoDataHandler, home: pyatmo.Home, options: list
     ) -> None:
         """Initialize the select entity."""
         SelectEntity.__init__(self)
@@ -97,27 +91,6 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
                 },
             ]
         )
-
-        # self._climate_state_class = f"{CLIMATE_STATE_CLASS_NAME}-{self._home_id}"
-        # self._climate_state: pyatmo.AsyncClimate = data_handler.data[
-        #     self._climate_state_class
-        # ]
-
-        # self._home = self._climate_state.homes[self._home_id]
-
-        # self._data_classes.extend(
-        #     [
-        #         {
-        #             "name": CLIMATE_TOPOLOGY_CLASS_NAME,
-        #             SIGNAL_NAME: CLIMATE_TOPOLOGY_CLASS_NAME,
-        #         },
-        #         {
-        #             "name": CLIMATE_STATE_CLASS_NAME,
-        #             "home_id": self._home_id,
-        #             SIGNAL_NAME: self._climate_state_class,
-        #         },
-        #     ]
-        # )
 
         self._device_name = self._home.name
         self._attr_name = f"{MANUFACTURER} {self._device_name}"

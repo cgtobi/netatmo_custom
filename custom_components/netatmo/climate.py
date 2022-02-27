@@ -126,21 +126,29 @@ async def async_setup_entry(
         raise PlatformNotReady
 
     entities = []
-    for home_id, home in account_topology.homes.items():
-        signal_name = f"{HOME}-{home_id}"
+    for home in account_topology.homes.values():
+        if NetatmoDeviceCategory.climate not in [
+            next(iter(x)) for x in [room.features for room in home.rooms.values()] if x
+        ]:
+            continue
 
-        await data_handler.subscribe(HOME, signal_name, None, home_id=home_id)
+        signal_name = f"{HOME}-{home.entity_id}"
+
+        await data_handler.subscribe(HOME, signal_name, None, home_id=home.entity_id)
 
         for room in home.rooms.values():
             if NetatmoDeviceCategory.climate not in room.features:
                 continue
+
             entities.append(NetatmoThermostat(data_handler, room))
 
-        hass.data[DOMAIN][DATA_SCHEDULES][home_id] = account_topology.homes[
-            home_id
+        hass.data[DOMAIN][DATA_SCHEDULES][home.entity_id] = account_topology.homes[
+            home.entity_id
         ].schedules
 
-        hass.data[DOMAIN][DATA_HOMES][home_id] = account_topology.homes[home_id].name
+        hass.data[DOMAIN][DATA_HOMES][home.entity_id] = account_topology.homes[
+            home.entity_id
+        ].name
 
     _LOGGER.debug("Adding climate devices %s", entities)
     async_add_entities(entities, True)

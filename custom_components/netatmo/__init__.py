@@ -37,7 +37,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.typing import ConfigType
 
 from . import api, config_flow
-from .const import (  # NETATMO_SCOPES,
+from .const import (
     AUTH,
     CONF_CLOUDHOOK_URL,
     DATA_CAMERAS,

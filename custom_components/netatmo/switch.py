@@ -57,7 +57,9 @@ async def async_setup_entry(
 class NetatmoSwitch(NetatmoBase, SwitchEntity):
     """Representation of a Netatmo switch device."""
 
-    def __init__(self, data_handler: NetatmoDataHandler, module: NaModules.NLP) -> None:
+    def __init__(
+        self, data_handler: NetatmoDataHandler, module: NaModules.Plug
+    ) -> None:
         """Initialize the Netatmo device."""
         SwitchEntity.__init__(self)
         super().__init__(data_handler)
