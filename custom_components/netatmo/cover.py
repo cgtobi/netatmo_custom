@@ -71,7 +71,7 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         CoverEntity.__init__(self)
         super().__init__(data_handler)
         # self.categories = set(self.device.categories)
-        # self.optimistic = optimistic
+        self.optimistic = True
 
         self._cover = module
 
@@ -126,7 +126,8 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         self.async_write_ha_state()
         try:
             await self._cover.async_close()
-            self._closed = True
+            if self.optimistic:
+                self._attr_is_closed = True
         finally:
             self._attr_is_closing = None
             self.async_write_ha_state()
@@ -137,7 +138,8 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         self.async_write_ha_state()
         try:
             await self._cover.async_open()
-            self._closed = False
+            if self.optimistic:
+                self._attr_is_closed = False
         finally:
             self._attr_is_opening = None
             self.async_write_ha_state()
