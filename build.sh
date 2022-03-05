@@ -1,8 +1,8 @@
 GH_RAW_BASE="https://raw.githubusercontent.com/cgtobi"
 
 ## Clean up custom component
-base_path="custom_components/netatmo"
-rm ${base_path}/*.py
+path="custom_components/netatmo"
+rm ${path}/*.py
 
 ## Gather HA integration and modify
 GH_REPO="home-assistant"
@@ -18,7 +18,7 @@ for file in ${files}; do
 done
 
 ## Gather pyatmo and modify
-path="${base_path}/pyatmo"
+path="custom_components/netatmo/pyatmo"
 rm ${path}/*.py
 
 GH_REPO="pyatmo"
@@ -33,7 +33,7 @@ for file in ${files}; do
   gsed -i 's/from \.\./from \./g' ${path}/${file}
 done
 
-path="${base_path}/pyatmo/modules"
+path="custom_components/netatmo/pyatmo/modules"
 rm ${path}/*.py
 
 gh_path="${GH_RAW_BASE}/${GH_REPO}/${GH_BRANCH}/src/pyatmo/modules"

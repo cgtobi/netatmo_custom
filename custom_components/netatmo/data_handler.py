@@ -11,16 +11,24 @@ from time import time
 from typing import Any
 
 from . import pyatmo
+from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     AUTH,
+    DATA_SCHEDULES,
     DOMAIN,
     MANUFACTURER,
+    NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_SELECT,
+    PLATFORMS,
     WEBHOOK_ACTIVATION,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
@@ -69,6 +77,16 @@ class NetatmoDevice:
 
 
 @dataclass
+class NetatmoHome:
+    """Netatmo device class."""
+
+    data_handler: NetatmoDataHandler
+    home: pyatmo.Home
+    parent_id: str
+    signal_name: str
+
+
+@dataclass
 class NetatmoPublisher:
     """Class for keeping track of Netatmo data class metadata."""
 
@@ -96,6 +114,7 @@ class NetatmoDataHandler:
 
     async def async_setup(self) -> None:
         """Set up the Netatmo data handler."""
+        print("data_handler setup - start")
         async_track_time_interval(
             self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
         )
@@ -116,6 +135,17 @@ class NetatmoDataHandler:
             await self.account.async_update_air_care()
         except pyatmo.NoDevice as err:
             _LOGGER.debug(err)
+
+        await asyncio.gather(
+            *(
+                self.hass.config_entries.async_forward_entry_setup(
+                    self.config_entry, platform
+                )
+                for platform in PLATFORMS
+            )
+        )
+
+        await self.async_dispatch()
 
     async def async_update(self, event_time: datetime) -> None:
         """
@@ -225,3 +255,49 @@ class NetatmoDataHandler:
     def webhook(self) -> bool:
         """Return the webhook state."""
         return self._webhook
+
+    async def async_dispatch(self) -> None:
+        """Dispatch the creation of entities."""
+        print("Dispatcher!")
+        for home in self.account.homes.values():
+            signal_name = f"{HOME}-{home.entity_id}"
+            print("dispatching for", signal_name)
+
+            await self.subscribe(HOME, signal_name, None, home_id=home.entity_id)
+
+            if NetatmoDeviceCategory.climate in [
+                next(iter(x))
+                for x in [room.features for room in home.rooms.values()]
+                if x
+            ]:
+                self.hass.data[DOMAIN][DATA_SCHEDULES][
+                    home.entity_id
+                ] = self.account.homes[home.entity_id].schedules
+
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_SELECT,
+                    NetatmoHome(
+                        self,
+                        home,
+                        home.entity_id,
+                        signal_name,
+                    ),
+                )
+
+            for room in home.rooms.values():
+                if NetatmoDeviceCategory.climate in room.features:
+                    print("dispatching room", room.name)
+                    for module in room.modules.values():
+                        if module.device_category is NetatmoDeviceCategory.climate:
+                            print("dispatching module", module.name)
+                            async_dispatcher_send(
+                                self.hass,
+                                NETATMO_CREATE_BATTERY,
+                                NetatmoDevice(
+                                    self,
+                                    module,
+                                    room.entity_id,
+                                    signal_name,
+                                ),
+                            )

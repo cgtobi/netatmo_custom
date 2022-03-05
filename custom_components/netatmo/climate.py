@@ -33,10 +33,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers import config_validation as cv, entity_platform
-from homeassistant.helpers.dispatcher import (
-    async_dispatcher_connect,
-    async_dispatcher_send,
-)
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -53,10 +50,9 @@ from .const import (
     EVENT_TYPE_SCHEDULE,
     EVENT_TYPE_SET_POINT,
     EVENT_TYPE_THERM_MODE,
-    NETATMO_CREATE_BATTERY,
     SERVICE_SET_SCHEDULE,
 )
-from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler, NetatmoDevice
+from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -228,21 +224,6 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
                     f"signal-{DOMAIN}-webhook-{event_type}",
                     self.handle_event,
                 )
-            )
-
-        for module in self._room.modules.values():
-            if module.device_category is not NetatmoDeviceCategory.climate:
-                continue
-
-            async_dispatcher_send(
-                self.hass,
-                NETATMO_CREATE_BATTERY,
-                NetatmoDevice(
-                    self.data_handler,
-                    module,
-                    self._id,
-                    self._signal_name,
-                ),
             )
 
     @callback
