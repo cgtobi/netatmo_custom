@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_CLIMATE,
     NETATMO_CREATE_SELECT,
     PLATFORMS,
     WEBHOOK_ACTIVATION,
@@ -78,10 +79,20 @@ class NetatmoDevice:
 
 @dataclass
 class NetatmoHome:
-    """Netatmo device class."""
+    """Netatmo home class."""
 
     data_handler: NetatmoDataHandler
     home: pyatmo.Home
+    parent_id: str
+    signal_name: str
+
+
+@dataclass
+class NetatmoRoom:
+    """Netatmo room class."""
+
+    data_handler: NetatmoDataHandler
+    room: pyatmo.Room
     parent_id: str
     signal_name: str
 
@@ -265,39 +276,56 @@ class NetatmoDataHandler:
 
             await self.subscribe(HOME, signal_name, None, home_id=home.entity_id)
 
-            if NetatmoDeviceCategory.climate in [
-                next(iter(x))
-                for x in [room.features for room in home.rooms.values()]
-                if x
-            ]:
-                self.hass.data[DOMAIN][DATA_SCHEDULES][
-                    home.entity_id
-                ] = self.account.homes[home.entity_id].schedules
+            self.setup_climate_schedule_select(home, signal_name)
+            self.setup_rooms(home, signal_name)
 
+    def setup_rooms(self, home: pyatmo.Home, signal_name: str) -> None:
+        """Set up rooms."""
+        for room in home.rooms.values():
+            if NetatmoDeviceCategory.climate in room.features:
+                print("dispatching room", room.name)
                 async_dispatcher_send(
                     self.hass,
-                    NETATMO_CREATE_SELECT,
-                    NetatmoHome(
+                    NETATMO_CREATE_CLIMATE,
+                    NetatmoRoom(
                         self,
-                        home,
+                        room,
                         home.entity_id,
                         signal_name,
                     ),
                 )
+                for module in room.modules.values():
+                    if module.device_category is NetatmoDeviceCategory.climate:
+                        print("dispatching module", module.name)
+                        async_dispatcher_send(
+                            self.hass,
+                            NETATMO_CREATE_BATTERY,
+                            NetatmoDevice(
+                                self,
+                                module,
+                                room.entity_id,
+                                signal_name,
+                            ),
+                        )
 
-            for room in home.rooms.values():
-                if NetatmoDeviceCategory.climate in room.features:
-                    print("dispatching room", room.name)
-                    for module in room.modules.values():
-                        if module.device_category is NetatmoDeviceCategory.climate:
-                            print("dispatching module", module.name)
-                            async_dispatcher_send(
-                                self.hass,
-                                NETATMO_CREATE_BATTERY,
-                                NetatmoDevice(
-                                    self,
-                                    module,
-                                    room.entity_id,
-                                    signal_name,
-                                ),
-                            )
+    def setup_climate_schedule_select(
+        self, home: pyatmo.Home, signal_name: str
+    ) -> None:
+        """Set up climate schedule per home."""
+        if NetatmoDeviceCategory.climate in [
+            next(iter(x)) for x in [room.features for room in home.rooms.values()] if x
+        ]:
+            self.hass.data[DOMAIN][DATA_SCHEDULES][home.entity_id] = self.account.homes[
+                home.entity_id
+            ].schedules
+
+            async_dispatcher_send(
+                self.hass,
+                NETATMO_CREATE_SELECT,
+                NetatmoHome(
+                    self,
+                    home,
+                    home.entity_id,
+                    signal_name,
+                ),
+            )

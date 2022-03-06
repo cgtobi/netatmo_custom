@@ -22,6 +22,7 @@ from homeassistant.const import (
     DEGREE,
     LENGTH_MILLIMETERS,
     PERCENTAGE,
+    POWER_WATT,
     PRESSURE_MBAR,
     SOUND_PRESSURE_DB,
     SPEED_KILOMETERS_PER_HOUR,
@@ -38,6 +39,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_URL_ENERGY,
     CONF_URL_WEATHER,
     CONF_WEATHER_AREAS,
     DATA_HANDLER,
@@ -225,6 +227,14 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         name="Health",
         entity_registry_enabled_default=True,
         icon="mdi:cloud",
+    ),
+    NetatmoSensorEntityDescription(
+        key="power",
+        name="Power",
+        entity_registry_enabled_default=True,
+        native_unit_of_measurement=POWER_WATT,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.POWER,
     ),
 )
 SENSOR_TYPES_KEYS = [desc.key for desc in SENSOR_TYPES]
@@ -460,6 +470,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
         self._attr_name = f"{self._module.name} {self.entity_description.name}"
         self._room_id = self._module.room_id
         self._model = getattr(self._module.device_type, "value")
+        self._netatmo_type = CONF_URL_ENERGY
 
         self._attr_unique_id = (
             f"{self._id}-{self._module.entity_id}-{self.entity_description.key}"

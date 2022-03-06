@@ -4,10 +4,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from . import pyatmo
-from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
-import voluptuous as vol
-
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
     CURRENT_HVAC_HEAT,
@@ -31,8 +27,6 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import PlatformNotReady
-from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -42,17 +36,15 @@ from .const import (
     ATTR_SCHEDULE_NAME,
     ATTR_SELECTED_SCHEDULE,
     CONF_URL_ENERGY,
-    DATA_HANDLER,
-    DATA_HOMES,
     DATA_SCHEDULES,
     DOMAIN,
     EVENT_TYPE_CANCEL_SET_POINT,
     EVENT_TYPE_SCHEDULE,
     EVENT_TYPE_SET_POINT,
     EVENT_TYPE_THERM_MODE,
-    SERVICE_SET_SCHEDULE,
+    NETATMO_CREATE_CLIMATE,
 )
-from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
+from .data_handler import HOME, SIGNAL_NAME, NetatmoRoom
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -114,49 +106,17 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo energy platform."""
-    data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
+    print("Setup of climate platform")
 
-    account_topology = data_handler.account
+    @callback
+    def _create_entity(netatmo_device: NetatmoRoom) -> None:
+        entity = NetatmoThermostat(netatmo_device)
+        _LOGGER.debug("Adding climate battery sensor %s", entity)
+        async_add_entities([entity])
 
-    if not account_topology or account_topology.raw_data == {}:
-        raise PlatformNotReady
-
-    entities = []
-    for home in account_topology.homes.values():
-        if NetatmoDeviceCategory.climate not in [
-            next(iter(x)) for x in [room.features for room in home.rooms.values()] if x
-        ]:
-            continue
-
-        signal_name = f"{HOME}-{home.entity_id}"
-
-        await data_handler.subscribe(HOME, signal_name, None, home_id=home.entity_id)
-
-        for room in home.rooms.values():
-            if NetatmoDeviceCategory.climate not in room.features:
-                continue
-
-            entities.append(NetatmoThermostat(data_handler, room))
-
-        hass.data[DOMAIN][DATA_SCHEDULES][home.entity_id] = account_topology.homes[
-            home.entity_id
-        ].schedules
-
-        hass.data[DOMAIN][DATA_HOMES][home.entity_id] = account_topology.homes[
-            home.entity_id
-        ].name
-
-    _LOGGER.debug("Adding climate devices %s", entities)
-    async_add_entities(entities, True)
-
-    platform = entity_platform.async_get_current_platform()
-
-    if account_topology is not None:
-        platform.async_register_entity_service(
-            SERVICE_SET_SCHEDULE,
-            {vol.Required(ATTR_SCHEDULE_NAME): cv.string},
-            "_async_service_set_schedule",
-        )
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_CLIMATE, _create_entity)
+    )
 
 
 class NetatmoThermostat(NetatmoBase, ClimateEntity):
@@ -169,12 +129,12 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
     _attr_target_temperature_step = PRECISION_HALVES
     _attr_temperature_unit = TEMP_CELSIUS
 
-    def __init__(self, data_handler: NetatmoDataHandler, room: pyatmo.Room) -> None:
+    def __init__(self, netatmo_device: NetatmoRoom) -> None:
         """Initialize the sensor."""
         ClimateEntity.__init__(self)
-        super().__init__(data_handler)
+        super().__init__(netatmo_device.data_handler)
 
-        self._room = room
+        self._room = netatmo_device.room
         self._id = self._room.entity_id
         self._home_id = self._room.home.entity_id
 
