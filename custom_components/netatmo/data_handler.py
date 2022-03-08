@@ -33,6 +33,7 @@ from .const import (
     NETATMO_CREATE_BATTERY,
     NETATMO_CREATE_CAMERA,
     NETATMO_CREATE_CLIMATE,
+    NETATMO_CREATE_COVER,
     NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_SELECT,
     PLATFORMS,
@@ -321,6 +322,18 @@ class NetatmoDataHandler:
                             signal_home,
                         ),
                     )
+            elif module.device_category is NetatmoDeviceCategory.shutter:
+                print("dispatching cover", module.name)
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_COVER,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        home.entity_id,
+                        signal_home,
+                    ),
+                )
 
     def setup_rooms(self, home: pyatmo.Home, signal_home: str) -> None:
         """Set up rooms."""

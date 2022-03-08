@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from .pyatmo import modules as NaModules
-from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
 
 from homeassistant.components.cover import (  # ATTR_TILT_POSITION,; SUPPORT_CLOSE_TILT,; SUPPORT_OPEN_TILT,; SUPPORT_SET_POSITION,; SUPPORT_SET_TILT_POSITION,; SUPPORT_STOP_TILT,
     ATTR_POSITION,
@@ -19,15 +18,14 @@ from homeassistant.config_entries import ConfigEntry
 
 # from homeassistant.const import CONF_OPTIMISTIC, STATE_CLOSED, STATE_OPEN
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import PlatformNotReady
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (  # ATTR_HEATING_POWER_REQUEST,; ATTR_SCHEDULE_NAME,; ATTR_SELECTED_SCHEDULE,; CONF_URL_ENERGY,; DATA_HOMES,; DATA_SCHEDULES,; EVENT_TYPE_CANCEL_SET_POINT,; EVENT_TYPE_SCHEDULE,; EVENT_TYPE_SET_POINT,; EVENT_TYPE_THERM_MODE,; NETATMO_CREATE_BATTERY,; SERVICE_SET_SCHEDULE,
     CONF_URL_CONTROL,
-    DATA_HANDLER,
-    DOMAIN,
+    NETATMO_CREATE_COVER,
 )
-from .data_handler import HOME, SIGNAL_NAME, NetatmoDataHandler
+from .data_handler import HOME, SIGNAL_NAME, NetatmoDevice
 from .netatmo_entity_base import NetatmoBase
 
 # from homeassistant.helpers.restore_state import RestoreEntity
@@ -42,45 +40,37 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Netatmo cover platform."""
-    data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
+    print("Setup of cover platform")
 
-    account_topology = data_handler.account
+    @callback
+    def _create_entity(netatmo_device: NetatmoDevice) -> None:
+        entity = NetatmoCover(netatmo_device)
+        _LOGGER.debug("Adding cover %s", entity)
+        async_add_entities([entity])
 
-    if not account_topology or account_topology.raw_data == {}:
-        raise PlatformNotReady
-
-    entities = []
-    for home_id in account_topology.homes:
-        signal_name = f"{HOME}-{home_id}"
-
-        await data_handler.subscribe(HOME, signal_name, None, home_id=home_id)
-
-        for module in account_topology.homes[home_id].modules.values():
-            if module.device_category is NetatmoDeviceCategory.shutter:
-                entities.append(NetatmoCover(data_handler, module))
-
-    _LOGGER.debug("Adding covers %s", entities)
-    async_add_entities(entities, True)
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_COVER, _create_entity)
+    )
 
 
 class NetatmoCover(NetatmoBase, CoverEntity):
     """Representation of a Netatmo cover device."""
 
-    def __init__(self, data_handler: NetatmoDataHandler, module: NaModules.NBR) -> None:
+    def __init__(self, netatmo_device: NetatmoDevice) -> None:
         """Initialize the Netatmo device."""
         CoverEntity.__init__(self)
-        super().__init__(data_handler)
+        super().__init__(netatmo_device.data_handler)
         # self.categories = set(self.device.categories)
         self.optimistic = True
 
-        self._cover = module
+        self._cover = cast(NaModules.Shutter, netatmo_device.device)
 
-        self._id = module.entity_id
-        self._attr_name = self._device_name = module.name
-        self._model = module.device_type
+        self._id = self._cover.entity_id
+        self._attr_name = self._device_name = self._cover.name
+        self._model = self._cover.device_type
         self._config_url = CONF_URL_CONTROL
 
-        self._home_id = module.home.entity_id
+        self._home_id = self._cover.home.entity_id
         self._closed: bool | None = None
         # self._is_opening: bool | None = None
         # self._is_closing: bool | None = None
@@ -96,7 +86,7 @@ class NetatmoCover(NetatmoBase, CoverEntity):
                 },
             ]
         )
-        self._attr_unique_id = f"{module.entity_id}-{self._model}"
+        self._attr_unique_id = f"{self._id}-{self._model}"
 
     @property
     def supported_features(self) -> int:
