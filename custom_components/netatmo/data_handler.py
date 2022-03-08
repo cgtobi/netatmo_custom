@@ -11,7 +11,10 @@ from time import time
 from typing import Any
 
 from . import pyatmo
-from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
+from .pyatmo.modules.device_types import (
+    DeviceCategory as NetatmoDeviceCategory,
+    DeviceType as NetatmoDeviceType,
+)
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -23,11 +26,14 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     AUTH,
+    DATA_PERSONS,
     DATA_SCHEDULES,
     DOMAIN,
     MANUFACTURER,
     NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_CAMERA,
     NETATMO_CREATE_CLIMATE,
+    NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_SELECT,
     PLATFORMS,
     WEBHOOK_ACTIVATION,
@@ -255,6 +261,9 @@ class NetatmoDataHandler:
         self, signal_name: str, update_callback: CALLBACK_TYPE | None
     ) -> None:
         """Unsubscribe from publisher."""
+        if update_callback in self.publisher[signal_name].subscriptions:
+            return
+
         self.publisher[signal_name].subscriptions.remove(update_callback)
 
         if not self.publisher[signal_name].subscriptions:
@@ -271,15 +280,49 @@ class NetatmoDataHandler:
         """Dispatch the creation of entities."""
         print("Dispatcher!")
         for home in self.account.homes.values():
-            signal_name = f"{HOME}-{home.entity_id}"
-            print("dispatching for", signal_name)
+            signal_home = f"{HOME}-{home.entity_id}"
+            # signal_event = f"{EVENT}-{home.entity_id}"
+            print("dispatching for", signal_home)
 
-            await self.subscribe(HOME, signal_name, None, home_id=home.entity_id)
+            await self.subscribe(HOME, signal_home, None, home_id=home.entity_id)
+            await self.subscribe(EVENT, signal_home, None, home_id=home.entity_id)
 
-            self.setup_climate_schedule_select(home, signal_name)
-            self.setup_rooms(home, signal_name)
+            self.setup_climate_schedule_select(home, signal_home)
+            self.setup_rooms(home, signal_home)
+            self.setup_modules(home, signal_home)
 
-    def setup_rooms(self, home: pyatmo.Home, signal_name: str) -> None:
+            self.hass.data[DOMAIN][DATA_PERSONS][home.entity_id] = {
+                person.entity_id: person.pseudo for person in home.persons.values()
+            }
+
+    def setup_modules(self, home: pyatmo.Home, signal_home: str) -> None:
+        """Set up modules."""
+        for module in home.modules.values():
+            if module.device_category is NetatmoDeviceCategory.camera:
+                print("dispatching camera", module.name)
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_CAMERA,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        home.entity_id,
+                        signal_home,
+                    ),
+                )
+                if module.device_type is NetatmoDeviceType.NOC:
+                    async_dispatcher_send(
+                        self.hass,
+                        NETATMO_CREATE_LIGHT,
+                        NetatmoDevice(
+                            self,
+                            module,
+                            home.entity_id,
+                            signal_home,
+                        ),
+                    )
+
+    def setup_rooms(self, home: pyatmo.Home, signal_home: str) -> None:
         """Set up rooms."""
         for room in home.rooms.values():
             if NetatmoDeviceCategory.climate in room.features:
@@ -291,7 +334,7 @@ class NetatmoDataHandler:
                         self,
                         room,
                         home.entity_id,
-                        signal_name,
+                        signal_home,
                     ),
                 )
                 for module in room.modules.values():
@@ -304,12 +347,12 @@ class NetatmoDataHandler:
                                 self,
                                 module,
                                 room.entity_id,
-                                signal_name,
+                                signal_home,
                             ),
                         )
 
     def setup_climate_schedule_select(
-        self, home: pyatmo.Home, signal_name: str
+        self, home: pyatmo.Home, signal_home: str
     ) -> None:
         """Set up climate schedule per home."""
         if NetatmoDeviceCategory.climate in [
@@ -326,6 +369,6 @@ class NetatmoDataHandler:
                     self,
                     home,
                     home.entity_id,
-                    signal_name,
+                    signal_home,
                 ),
             )

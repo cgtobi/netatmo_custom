@@ -31,6 +31,8 @@ SIGNAL_NAME = "signal_name"
 NETATMO_CREATE_BATTERY = "netatmo_create_battery"
 NETATMO_CREATE_CLIMATE = "netatmo_create_climate"
 NETATMO_CREATE_SELECT = "netatmo_create_select"
+NETATMO_CREATE_CAMERA = "netatmo_create_camera"
+NETATMO_CREATE_LIGHT = "netatmo_create_light"
 
 CONF_CLOUDHOOK_URL = "cloudhook_url"
 CONF_WEATHER_AREAS = "weather_areas"

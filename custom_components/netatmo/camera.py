@@ -8,7 +8,6 @@ import aiohttp
 from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
 from .pyatmo.modules.device_types import (
     DEVICE_DESCRIPTION_MAP,
-    DeviceCategory as NetatmoDeviceCategory,
     DeviceType as NetatmoDeviceType,
 )
 import voluptuous as vol
@@ -16,7 +15,7 @@ import voluptuous as vol
 from homeassistant.components.camera import SUPPORT_STREAM, Camera
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError, PlatformNotReady
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -29,13 +28,12 @@ from .const import (
     CONF_URL_SECURITY,
     DATA_CAMERAS,
     DATA_EVENTS,
-    DATA_HANDLER,
-    DATA_PERSONS,
     DOMAIN,
     EVENT_TYPE_LIGHT_MODE,
     EVENT_TYPE_OFF,
     EVENT_TYPE_ON,
     MANUFACTURER,
+    NETATMO_CREATE_CAMERA,
     SERVICE_SET_CAMERA_LIGHT,
     SERVICE_SET_PERSON_AWAY,
     SERVICE_SET_PERSONS_HOME,
@@ -43,7 +41,7 @@ from .const import (
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
 )
-from .data_handler import EVENT, HOME, SIGNAL_NAME, NetatmoDataHandler
+from .data_handler import EVENT, HOME, SIGNAL_NAME, NetatmoDevice
 from .netatmo_entity_base import NetatmoBase
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,32 +53,17 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo camera platform."""
-    data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
+    print("Setup of camera platform")
 
-    account_topology = data_handler.account
+    @callback
+    def _create_entity(netatmo_device: NetatmoDevice) -> None:
+        entity = NetatmoCamera(netatmo_device)
+        _LOGGER.debug("Adding climate battery sensor %s", entity)
+        async_add_entities([entity])
 
-    if not account_topology or not account_topology.raw_data:
-        raise PlatformNotReady
-
-    entities = []
-    for home_id in account_topology.homes:
-        await data_handler.subscribe(HOME, f"{HOME}-{home_id}", None, home_id=home_id)
-        await data_handler.subscribe(EVENT, f"{EVENT}-{home_id}", None, home_id=home_id)
-
-        for camera in account_topology.homes[home_id].modules.values():
-            if camera.device_category is NetatmoDeviceCategory.camera:
-                entities.append(NetatmoCamera(data_handler, camera))
-
-    for home in account_topology.homes.values():
-        if home.entity_id is None:
-            continue
-
-        hass.data[DOMAIN][DATA_PERSONS][home.entity_id] = {
-            person.entity_id: person.pseudo for person in home.persons.values()
-        }
-
-    _LOGGER.debug("Adding cameras %s", entities)
-    async_add_entities(entities, True)
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_CAMERA, _create_entity)
+    )
 
     platform = entity_platform.async_get_current_platform()
 
@@ -105,19 +88,20 @@ class NetatmoCamera(NetatmoBase, Camera):
     """Representation of a Netatmo camera."""
 
     def __init__(
-        self, data_handler: NetatmoDataHandler, camera: NaModules.Camera
+        self,
+        netatmo_device: NetatmoDevice,
     ) -> None:
         """Set up for access to the Netatmo camera images."""
         Camera.__init__(self)
-        super().__init__(data_handler)
+        super().__init__(netatmo_device.data_handler)
 
-        self._camera = camera
+        self._camera = cast(NaModules.Camera, netatmo_device.device)
         self._id = self._camera.entity_id
         self._home_id = self._camera.home.entity_id
         self._device_name = self._camera.name
         self._attr_name = f"{MANUFACTURER} {self._device_name}"
         self._model = self._camera.device_type
-        self._netatmo_type = CONF_URL_SECURITY
+        self._config_url = CONF_URL_SECURITY
         self._attr_unique_id = f"{self._id}-{self._model}"
         self._quality = DEFAULT_QUALITY
         self._vpnurl: str | None = None

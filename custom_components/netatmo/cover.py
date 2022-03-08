@@ -78,7 +78,7 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         self._id = module.entity_id
         self._attr_name = self._device_name = module.name
         self._model = module.device_type
-        self._netatmo_type = CONF_URL_CONTROL
+        self._config_url = CONF_URL_CONTROL
 
         self._home_id = module.home.entity_id
         self._closed: bool | None = None

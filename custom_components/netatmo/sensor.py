@@ -379,7 +379,7 @@ class NetatmoSensor(NetatmoBase, SensorEntity):
 
         self._attr_name = f"{MANUFACTURER} {self._device_name} {description.name}"
         self._model = self._module.device_type
-        self._netatmo_type = CONF_URL_WEATHER
+        self._config_url = CONF_URL_WEATHER
         self._attr_unique_id = f"{self._id}-{description.key}"
 
     async def async_added_to_hass(self) -> None:
@@ -470,7 +470,7 @@ class NetatmoClimateBatterySensor(NetatmoBase, SensorEntity):
         self._attr_name = f"{self._module.name} {self.entity_description.name}"
         self._room_id = self._module.room_id
         self._model = getattr(self._module.device_type, "value")
-        self._netatmo_type = CONF_URL_ENERGY
+        self._config_url = CONF_URL_ENERGY
 
         self._attr_unique_id = (
             f"{self._id}-{self._module.entity_id}-{self.entity_description.key}"
