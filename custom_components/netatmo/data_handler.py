@@ -36,6 +36,7 @@ from .const import (
     NETATMO_CREATE_COVER,
     NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_SELECT,
+    NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
     WEBHOOK_ACTIVATION,
     WEBHOOK_DEACTIVATION,
@@ -148,11 +149,6 @@ class NetatmoDataHandler:
         self.account = pyatmo.AsyncAccount(self._auth)
 
         await self.subscribe(ACCOUNT, ACCOUNT, None)
-
-        try:
-            await self.account.async_update_air_care()
-        except pyatmo.NoDevice as err:
-            _LOGGER.debug(err)
 
         await asyncio.gather(
             *(
@@ -280,6 +276,24 @@ class NetatmoDataHandler:
     async def async_dispatch(self) -> None:
         """Dispatch the creation of entities."""
         print("Dispatcher!")
+
+        await self.subscribe(WEATHER, WEATHER, None)
+        await self.subscribe(AIR_CARE, AIR_CARE, None)
+
+        for module in self.account.modules.values():
+            if module.device_category is NetatmoDeviceCategory.air_care:
+                print(">>> dispatching air care sensor", module.name)
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_WEATHER_SENSOR,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        AIR_CARE,
+                        AIR_CARE,
+                    ),
+                )
+
         for home in self.account.homes.values():
             signal_home = f"{HOME}-{home.entity_id}"
             # signal_event = f"{EVENT}-{home.entity_id}"
@@ -332,6 +346,18 @@ class NetatmoDataHandler:
                         module,
                         home.entity_id,
                         signal_home,
+                    ),
+                )
+            elif module.device_category is NetatmoDeviceCategory.weather:
+                print("dispatching weather sensor", module.name)
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_WEATHER_SENSOR,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        home.entity_id,
+                        WEATHER,
                     ),
                 )
 

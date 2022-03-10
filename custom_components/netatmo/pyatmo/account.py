@@ -6,6 +6,7 @@ from abc import ABC
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from . import modules
 from .const import (
     _GETEVENTS_REQ,
     _GETHOMECOACHDATA_REQ,
@@ -18,7 +19,6 @@ from .const import (
 )
 from .helpers import extract_raw_data_new
 from .home import Home
-from .modules import PublicWeatherArea
 
 if TYPE_CHECKING:
     from .auth import AbstractAsyncAuth
@@ -34,7 +34,7 @@ class AbstractAccount(ABC):
     homes: dict[str, Home]
     raw_data: dict
     favorite_stations: bool
-    public_weather_areas: dict[str, PublicWeatherArea]
+    public_weather_areas: dict[str, modules.PublicWeatherArea]
 
     def __repr__(self) -> str:
         return (
@@ -63,6 +63,7 @@ class AsyncAccount(AbstractAccount):
         self.homes = {}
         self.favorite_stations = favorite_stations
         self.public_weather_areas = {}
+        self.modules = {}
 
     async def async_update_topology(self) -> None:
         """Retrieve topology data from /homesdata."""
@@ -112,7 +113,7 @@ class AsyncAccount(AbstractAccount):
         area_id: str = str(uuid4()),
     ) -> str:
         """Register public weather area to monitor."""
-        self.public_weather_areas[area_id] = PublicWeatherArea(
+        self.public_weather_areas[area_id] = modules.PublicWeatherArea(
             lat_ne,
             lon_ne,
             lat_sw,
@@ -167,6 +168,19 @@ class AsyncAccount(AbstractAccount):
                 )
             for module_data in device_data.get("modules", []):
                 await self.update_devices({"devices": [module_data]})
+
+            if device_data["type"] == "NHC":
+                device_data["name"] = device_data["station_name"]
+                device_data = fix_weather_attributes(device_data)
+                if device_data["id"] not in self.modules:
+                    self.modules[device_data["id"]] = getattr(
+                        modules,
+                        device_data["type"],
+                    )(
+                        home=self,
+                        module=device_data,
+                    )
+                await self.modules[device_data["id"]].update(device_data)
 
         if area_id is not None:
             self.public_weather_areas[area_id].update(raw_data)

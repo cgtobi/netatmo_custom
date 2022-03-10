@@ -34,6 +34,7 @@ NETATMO_CREATE_SELECT = "netatmo_create_select"
 NETATMO_CREATE_CAMERA = "netatmo_create_camera"
 NETATMO_CREATE_LIGHT = "netatmo_create_light"
 NETATMO_CREATE_COVER = "netatmo_create_cover"
+NETATMO_CREATE_WEATHER_SENSOR = "netatmo_create_weather_sensor"
 
 CONF_CLOUDHOOK_URL = "cloudhook_url"
 CONF_WEATHER_AREAS = "weather_areas"

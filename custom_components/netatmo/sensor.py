@@ -6,7 +6,6 @@ import logging
 from typing import cast
 
 from . import pyatmo
-from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -46,6 +45,7 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_WEATHER_SENSOR,
     SIGNAL_NAME,
 )
 from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice
@@ -158,13 +158,13 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY,
     ),
     NetatmoSensorEntityDescription(
-        key="wind_angle",
+        key="wind_direction",
         name="Direction",
         entity_registry_enabled_default=True,
         icon="mdi:compass-outline",
     ),
     NetatmoSensorEntityDescription(
-        key="wind_angle_value",
+        key="wind_angle",
         name="Angle",
         entity_registry_enabled_default=False,
         native_unit_of_measurement=DEGREE,
@@ -180,13 +180,13 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     NetatmoSensorEntityDescription(
-        key="gust_angle",
+        key="gust_direction",
         name="Gust Direction",
         entity_registry_enabled_default=False,
         icon="mdi:compass-outline",
     ),
     NetatmoSensorEntityDescription(
-        key="gust_angle_value",
+        key="gust_angle",
         name="Gust Angle",
         entity_registry_enabled_default=False,
         native_unit_of_measurement=DEGREE,
@@ -244,48 +244,44 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo weather and homecoach platform."""
+
+    @callback
+    def _create_battery_entity(netatmo_device: NetatmoDevice) -> None:
+        entity = NetatmoClimateBatterySensor(netatmo_device)
+        _LOGGER.debug("Adding climate battery sensor %s", entity)
+        async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_BATTERY, _create_battery_entity)
+    )
+
+    @callback
+    def _create_sensor_entity(netatmo_device: NetatmoDevice) -> None:
+        _LOGGER.debug(
+            "Adding %s sensor %s",
+            netatmo_device.device.device_category,
+            netatmo_device.device.name,
+        )
+        async_add_entities(
+            [
+                NetatmoSensor(netatmo_device, description)
+                for description in SENSOR_TYPES
+                if description.key in netatmo_device.device.features
+            ]
+        )
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, NETATMO_CREATE_WEATHER_SENSOR, _create_sensor_entity
+        )
+    )
+
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
     account_topology = data_handler.account
 
     if not account_topology or account_topology.raw_data == {}:
         raise PlatformNotReady
-
-    @callback
-    def _create_entity(netatmo_device: NetatmoDevice) -> None:
-        entity = NetatmoClimateBatterySensor(netatmo_device)
-        _LOGGER.debug("Adding climate battery sensor %s", entity)
-        async_add_entities([entity])
-
-    entry.async_on_unload(
-        async_dispatcher_connect(hass, NETATMO_CREATE_BATTERY, _create_entity)
-    )
-
-    entities = []
-    for home in account_topology.homes.values():
-        for module in home.modules.values():
-            if module.device_category in (
-                NetatmoDeviceCategory.weather,
-                NetatmoDeviceCategory.air_care,
-            ):
-                await data_handler.subscribe(
-                    module.device_category.name, module.device_category.name, None
-                )
-                conditions = set()
-                for feature in module.features:
-                    conditions.add(feature)
-                    if f"{feature}_value" in SENSOR_TYPES_KEYS:
-                        conditions.add(f"{feature}_value")
-
-                entities.extend(
-                    [
-                        NetatmoSensor(data_handler, module, description)
-                        for description in SENSOR_TYPES
-                        if description.key in conditions
-                    ]
-                )
-
-    async_add_entities(entities, True)
 
     device_registry = await hass.helpers.device_registry.async_get_registry()
 
@@ -351,21 +347,20 @@ async def async_setup_entry(
 class NetatmoSensor(NetatmoBase, SensorEntity):
     """Implementation of a Netatmo sensor."""
 
-    entity_description: NetatmoSensorEntityDescription
-
     def __init__(
         self,
-        data_handler: NetatmoDataHandler,
-        module: pyatmo.Module,
+        netatmo_device: NetatmoDevice,
         description: NetatmoSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(data_handler)
+        super().__init__(netatmo_device.data_handler)
         self.entity_description = description
 
-        self._id = module.entity_id
-        self._module = module
-        self._station_id = module.bridge if module.bridge is not None else self._id
+        self._module = netatmo_device.device
+        self._id = self._module.entity_id
+        self._station_id = (
+            self._module.bridge if self._module.bridge is not None else self._id
+        )
         self._device_name = self._module.name
         category = getattr(self._module.device_category, "name")
         self._publishers.extend(
@@ -405,13 +400,13 @@ class NetatmoSensor(NetatmoBase, SensorEntity):
 
             if self.entity_description.key in {"temperature", "pressure", "sum_rain_1"}:
                 self._attr_native_value = round(state, 1)
-            elif self.entity_description.key in {
-                "wind_angle_value",
-                "gust_angle_value",
-            }:
-                self._attr_native_value = fix_angle(state)
-            elif self.entity_description.key in {"wind_angle", "gust_angle"}:
-                self._attr_native_value = process_angle(fix_angle(state))
+            # elif self.entity_description.key in {
+            #     "wind_angle_value",
+            #     "gust_angle_value",
+            # }:
+            #     self._attr_native_value = fix_angle(state)
+            # elif self.entity_description.key in {"wind_angle", "gust_angle"}:
+            #     self._attr_native_value = process_angle(fix_angle(state))
             elif self.entity_description.key == "rf_strength":
                 self._attr_native_value = process_rf(state)
             elif self.entity_description.key == "wifi_strength":
@@ -498,27 +493,6 @@ def fix_angle(angle: int) -> int:
     if angle < 0:
         return 360 + angle
     return angle
-
-
-def process_angle(angle: int) -> str:
-    """Process angle and return string for display."""
-    if angle >= 330:
-        return "N"
-    if angle >= 300:
-        return "NW"
-    if angle >= 240:
-        return "W"
-    if angle >= 210:
-        return "SW"
-    if angle >= 150:
-        return "S"
-    if angle >= 120:
-        return "SE"
-    if angle >= 60:
-        return "E"
-    if angle >= 30:
-        return "NE"
-    return "N"
 
 
 def process_health(health: int) -> str:
