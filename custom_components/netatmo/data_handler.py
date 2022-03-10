@@ -133,7 +133,6 @@ class NetatmoDataHandler:
 
     async def async_setup(self) -> None:
         """Set up the Netatmo data handler."""
-        print("data_handler setup - start")
         async_track_time_interval(
             self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
         )
@@ -275,29 +274,13 @@ class NetatmoDataHandler:
 
     async def async_dispatch(self) -> None:
         """Dispatch the creation of entities."""
-        print("Dispatcher!")
-
         await self.subscribe(WEATHER, WEATHER, None)
         await self.subscribe(AIR_CARE, AIR_CARE, None)
 
-        for module in self.account.modules.values():
-            if module.device_category is NetatmoDeviceCategory.air_care:
-                print(">>> dispatching air care sensor", module.name)
-                async_dispatcher_send(
-                    self.hass,
-                    NETATMO_CREATE_WEATHER_SENSOR,
-                    NetatmoDevice(
-                        self,
-                        module,
-                        AIR_CARE,
-                        AIR_CARE,
-                    ),
-                )
+        self.setup_air_care()
 
         for home in self.account.homes.values():
             signal_home = f"{HOME}-{home.entity_id}"
-            # signal_event = f"{EVENT}-{home.entity_id}"
-            print("dispatching for", signal_home)
 
             await self.subscribe(HOME, signal_home, None, home_id=home.entity_id)
             await self.subscribe(EVENT, signal_home, None, home_id=home.entity_id)
@@ -310,11 +293,25 @@ class NetatmoDataHandler:
                 person.entity_id: person.pseudo for person in home.persons.values()
             }
 
+    def setup_air_care(self) -> None:
+        """Set up home coach/air care modules."""
+        for module in self.account.modules.values():
+            if module.device_category is NetatmoDeviceCategory.air_care:
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_WEATHER_SENSOR,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        AIR_CARE,
+                        AIR_CARE,
+                    ),
+                )
+
     def setup_modules(self, home: pyatmo.Home, signal_home: str) -> None:
         """Set up modules."""
         for module in home.modules.values():
             if module.device_category is NetatmoDeviceCategory.camera:
-                print("dispatching camera", module.name)
                 async_dispatcher_send(
                     self.hass,
                     NETATMO_CREATE_CAMERA,
@@ -337,7 +334,6 @@ class NetatmoDataHandler:
                         ),
                     )
             elif module.device_category is NetatmoDeviceCategory.shutter:
-                print("dispatching cover", module.name)
                 async_dispatcher_send(
                     self.hass,
                     NETATMO_CREATE_COVER,
@@ -349,7 +345,6 @@ class NetatmoDataHandler:
                     ),
                 )
             elif module.device_category is NetatmoDeviceCategory.weather:
-                print("dispatching weather sensor", module.name)
                 async_dispatcher_send(
                     self.hass,
                     NETATMO_CREATE_WEATHER_SENSOR,
@@ -365,7 +360,6 @@ class NetatmoDataHandler:
         """Set up rooms."""
         for room in home.rooms.values():
             if NetatmoDeviceCategory.climate in room.features:
-                print("dispatching room", room.name)
                 async_dispatcher_send(
                     self.hass,
                     NETATMO_CREATE_CLIMATE,
@@ -378,7 +372,6 @@ class NetatmoDataHandler:
                 )
                 for module in room.modules.values():
                     if module.device_category is NetatmoDeviceCategory.climate:
-                        print("dispatching module", module.name)
                         async_dispatcher_send(
                             self.hass,
                             NETATMO_CREATE_BATTERY,

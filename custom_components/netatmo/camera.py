@@ -113,18 +113,17 @@ class NetatmoCamera(NetatmoBase, Camera):
         self._light_state = None
         self._attr_brand = MANUFACTURER
 
-        self._signal_name = f"{HOME}-{self._home_id}"
         self._publishers.extend(
             [
                 {
                     "name": HOME,
                     "home_id": self._home_id,
-                    SIGNAL_NAME: self._signal_name,
+                    SIGNAL_NAME: f"{HOME}-{self._home_id}",
                 },
                 {
                     "name": EVENT,
                     "home_id": self._home_id,
-                    SIGNAL_NAME: self._signal_name,
+                    SIGNAL_NAME: f"{EVENT}-{self._home_id}",
                 },
             ]
         )
@@ -254,12 +253,19 @@ class NetatmoCamera(NetatmoBase, Camera):
             if not (video_id := getattr(event, "video_id")):
                 continue
             event_data = event.__dict__
+            subevents = []
             if "subevents" in event_data:
-                event_data["subevents"] = [
-                    event.__dict__ for event in event_data["subevents"]
-                ]
+                try:
+                    subevents = [event.__dict__ for event in event_data["subevents"]]
+                    print(".")
+                except AttributeError:
+                    print("\n", event_data["subevents"])
+
+            event_data["subevents"] = subevents
+
             event_data["media_url"] = self.get_video_url(video_id)
             events[event.event_time] = event_data
+        print(events)
         return events
 
     def get_video_url(self, video_id: str) -> str:
