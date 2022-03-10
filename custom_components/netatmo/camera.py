@@ -12,7 +12,7 @@ from .pyatmo.modules.device_types import (
 )
 import voluptuous as vol
 
-from homeassistant.components.camera import SUPPORT_STREAM, Camera
+from homeassistant.components.camera import SUPPORT_ON_OFF, SUPPORT_STREAM, Camera
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -53,7 +53,6 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo camera platform."""
-    print("Setup of camera platform")
 
     @callback
     def _create_entity(netatmo_device: NetatmoDevice) -> None:
@@ -189,7 +188,10 @@ class NetatmoCamera(NetatmoBase, Camera):
     @property
     def supported_features(self) -> int:
         """Return supported features."""
-        return SUPPORT_STREAM
+        supported_features = SUPPORT_ON_OFF
+        if self._model != "NDB":
+            supported_features |= SUPPORT_STREAM
+        return supported_features
 
     async def async_turn_off(self) -> None:
         """Turn off camera."""
@@ -253,19 +255,13 @@ class NetatmoCamera(NetatmoBase, Camera):
             if not (video_id := getattr(event, "video_id")):
                 continue
             event_data = event.__dict__
-            subevents = []
-            if "subevents" in event_data:
-                try:
-                    subevents = [event.__dict__ for event in event_data["subevents"]]
-                    print(".")
-                except AttributeError:
-                    print("\n", event_data["subevents"])
-
-            event_data["subevents"] = subevents
-
+            event_data["subevents"] = [
+                event.__dict__
+                for event in event_data.get("subevents", [])
+                if not isinstance(event, dict)
+            ]
             event_data["media_url"] = self.get_video_url(video_id)
             events[event.event_time] = event_data
-        print(events)
         return events
 
     def get_video_url(self, video_id: str) -> str:
