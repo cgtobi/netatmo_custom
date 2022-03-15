@@ -36,6 +36,7 @@ from .const import (
     NETATMO_CREATE_COVER,
     NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_SELECT,
+    NETATMO_CREATE_SWITCH,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
     WEBHOOK_ACTIVATION,
@@ -322,18 +323,18 @@ class NetatmoDataHandler:
                         signal_home,
                     ),
                 )
-                if module.device_type is NetatmoDeviceType.NOC:
-                    async_dispatcher_send(
-                        self.hass,
-                        NETATMO_CREATE_LIGHT,
-                        NetatmoDevice(
-                            self,
-                            module,
-                            home.entity_id,
-                            signal_home,
-                        ),
-                    )
-            elif module.device_category is NetatmoDeviceCategory.shutter:
+            if module.device_type is NetatmoDeviceType.NOC:
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_LIGHT,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        home.entity_id,
+                        signal_home,
+                    ),
+                )
+            if module.device_category is NetatmoDeviceCategory.shutter:
                 async_dispatcher_send(
                     self.hass,
                     NETATMO_CREATE_COVER,
@@ -344,7 +345,7 @@ class NetatmoDataHandler:
                         signal_home,
                     ),
                 )
-            elif module.device_category is NetatmoDeviceCategory.weather:
+            if module.device_category is NetatmoDeviceCategory.weather:
                 async_dispatcher_send(
                     self.hass,
                     NETATMO_CREATE_WEATHER_SENSOR,
@@ -353,6 +354,17 @@ class NetatmoDataHandler:
                         module,
                         home.entity_id,
                         WEATHER,
+                    ),
+                )
+            if module.device_category is NetatmoDeviceCategory.plug:
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_SWITCH,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        home.entity_id,
+                        signal_home,
                     ),
                 )
 
