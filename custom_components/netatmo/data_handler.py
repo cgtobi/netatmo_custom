@@ -11,10 +11,7 @@ from time import time
 from typing import Any
 
 from . import pyatmo
-from .pyatmo.modules.device_types import (
-    DeviceCategory as NetatmoDeviceCategory,
-    DeviceType as NetatmoDeviceType,
-)
+from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -311,33 +308,19 @@ class NetatmoDataHandler:
 
     def setup_modules(self, home: pyatmo.Home, signal_home: str) -> None:
         """Set up modules."""
+        netatmo_type_signal_map = {
+            NetatmoDeviceCategory.camera: [NETATMO_CREATE_CAMERA, NETATMO_CREATE_LIGHT],
+            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
+            NetatmoDeviceCategory.plug: [NETATMO_CREATE_SWITCH],
+        }
         for module in home.modules.values():
-            if module.device_category is NetatmoDeviceCategory.camera:
+            if not module.device_category:
+                continue
+
+            for signal in netatmo_type_signal_map.get(module.device_category, []):
                 async_dispatcher_send(
                     self.hass,
-                    NETATMO_CREATE_CAMERA,
-                    NetatmoDevice(
-                        self,
-                        module,
-                        home.entity_id,
-                        signal_home,
-                    ),
-                )
-            if module.device_type is NetatmoDeviceType.NOC:
-                async_dispatcher_send(
-                    self.hass,
-                    NETATMO_CREATE_LIGHT,
-                    NetatmoDevice(
-                        self,
-                        module,
-                        home.entity_id,
-                        signal_home,
-                    ),
-                )
-            if module.device_category is NetatmoDeviceCategory.shutter:
-                async_dispatcher_send(
-                    self.hass,
-                    NETATMO_CREATE_COVER,
+                    signal,
                     NetatmoDevice(
                         self,
                         module,
@@ -354,17 +337,6 @@ class NetatmoDataHandler:
                         module,
                         home.entity_id,
                         WEATHER,
-                    ),
-                )
-            if module.device_category is NetatmoDeviceCategory.plug:
-                async_dispatcher_send(
-                    self.hass,
-                    NETATMO_CREATE_SWITCH,
-                    NetatmoDevice(
-                        self,
-                        module,
-                        home.entity_id,
-                        signal_home,
                     ),
                 )
 

@@ -35,6 +35,10 @@ async def async_setup_entry(
 
     @callback
     def _create_entity(netatmo_device: NetatmoDevice) -> None:
+        try:
+            getattr(netatmo_device.device, "floodlight")
+        except AttributeError:
+            return
         entity = NetatmoLight(netatmo_device)
         _LOGGER.debug("Adding climate battery sensor %s", entity)
         async_add_entities([entity])
