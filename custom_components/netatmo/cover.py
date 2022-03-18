@@ -10,6 +10,7 @@ from homeassistant.components.cover import (  # ATTR_TILT_POSITION,; SUPPORT_CLO
     ATTR_POSITION,
     SUPPORT_CLOSE,
     SUPPORT_OPEN,
+    SUPPORT_SET_POSITION,
     SUPPORT_STOP,
     CoverDeviceClass,
     CoverEntity,
@@ -99,7 +100,7 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         # if self.has_capability("stop"):
         supported_features |= SUPPORT_STOP
         # if self.has_capability("position"):
-        #     supported_features |= SUPPORT_SET_POSITION
+        supported_features |= SUPPORT_SET_POSITION
         # if self.has_capability("rotation"):
         #     supported_features |= (
         #         SUPPORT_OPEN_TILT
