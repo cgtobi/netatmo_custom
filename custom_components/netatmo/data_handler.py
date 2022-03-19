@@ -313,6 +313,7 @@ class NetatmoDataHandler:
             NetatmoDeviceCategory.camera: [NETATMO_CREATE_CAMERA, NETATMO_CREATE_LIGHT],
             NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
             NetatmoDeviceCategory.plug: [NETATMO_CREATE_SWITCH, NETATMO_CREATE_SENSOR],
+            NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR],
         }
         for module in home.modules.values():
             if not module.device_category:
