@@ -387,10 +387,10 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
             self._attr_extra_state_attributes[
                 ATTR_HEATING_POWER_REQUEST
             ] = self._room.heating_power_request
-        # else:
-        #     for module in self._room.modules.values():
-        #         self._boilerstatus = module.boiler_status
-        #         break
+        else:
+            for module in self._room.modules.values():
+                self._boilerstatus = module.boiler_status
+                break
 
     async def _async_service_set_schedule(self, **kwargs: Any) -> None:
         schedule_name = kwargs.get(ATTR_SCHEDULE_NAME)
