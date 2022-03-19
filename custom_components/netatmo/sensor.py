@@ -28,7 +28,6 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.device_registry import async_entries_for_config_entry
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
@@ -302,10 +301,10 @@ async def async_setup_entry(
 
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    account_topology = data_handler.account
+    # account_topology = data_handler.account
 
-    if not account_topology or account_topology.raw_data == {}:
-        raise PlatformNotReady
+    # if not account_topology or account_topology.raw_data == {}:
+    #     raise PlatformNotReady
 
     device_registry = await hass.helpers.device_registry.async_get_registry()
 
