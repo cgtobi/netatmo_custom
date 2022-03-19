@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
+from .pyatmo.modules import NATherm1
 import voluptuous as vol
 
 from homeassistant.components.climate import ClimateEntity
@@ -387,10 +388,13 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
             self._attr_extra_state_attributes[
                 ATTR_HEATING_POWER_REQUEST
             ] = self._room.heating_power_request
-        # else:
-        #     for module in self._room.modules.values():
-        #         self._boilerstatus = module.boiler_status
-        #         break
+        else:
+            for module in self._room.modules.values():
+                if hasattr(module, "boiler_status"):
+                    module = cast(NATherm1, module)
+                    if module.boiler_status:
+                        self._boilerstatus = module.boiler_status
+                        break
 
     async def _async_service_set_schedule(self, **kwargs: Any) -> None:
         schedule_name = kwargs.get(ATTR_SCHEDULE_NAME)
