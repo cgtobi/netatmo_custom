@@ -33,6 +33,7 @@ from .const import (
     NETATMO_CREATE_COVER,
     NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_SELECT,
+    NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_SWITCH,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
@@ -311,7 +312,7 @@ class NetatmoDataHandler:
         netatmo_type_signal_map = {
             NetatmoDeviceCategory.camera: [NETATMO_CREATE_CAMERA, NETATMO_CREATE_LIGHT],
             NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
-            NetatmoDeviceCategory.plug: [NETATMO_CREATE_SWITCH],
+            NetatmoDeviceCategory.plug: [NETATMO_CREATE_SWITCH, NETATMO_CREATE_SENSOR],
         }
         for module in home.modules.values():
             if not module.device_category:
