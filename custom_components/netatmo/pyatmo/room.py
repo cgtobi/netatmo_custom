@@ -33,6 +33,7 @@ class Room(NetatmoBase):
     therm_setpoint_temperature: float | None = None
     therm_setpoint_mode: str | None = None
     therm_measured_temperature: float | None = None
+    humidity: int | None = None
     heating_power_request: int | None = None
 
     def __init__(
@@ -79,6 +80,7 @@ class Room(NetatmoBase):
     def update(self, raw_data: dict) -> None:
         self.reachable = raw_data.get("reachable")
         self.therm_measured_temperature = raw_data.get("therm_measured_temperature")
+        self.humidity = raw_data.get("humidity")
         self.therm_setpoint_mode = raw_data.get("therm_setpoint_mode")
         self.therm_setpoint_temperature = raw_data.get("therm_setpoint_temperature")
         self.heating_power_request = raw_data.get("heating_power_request")

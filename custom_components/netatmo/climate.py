@@ -371,6 +371,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
         self._hg_temperature = self._room.home.get_hg_temp()
         self._attr_current_temperature = self._room.therm_measured_temperature
         self._attr_target_temperature = self._room.therm_setpoint_temperature
+        self._attr_current_humidity = self._room.humidity
         self._attr_preset_mode = NETATMO_MAP_PRESET[
             getattr(self._room, "therm_setpoint_mode", STATE_NETATMO_SCHEDULE)
         ]
