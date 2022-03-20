@@ -300,12 +300,6 @@ async def async_setup_entry(
     )
 
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
-
-    # account_topology = data_handler.account
-
-    # if not account_topology or account_topology.raw_data == {}:
-    #     raise PlatformNotReady
-
     device_registry = await hass.helpers.device_registry.async_get_registry()
 
     async def add_public_entities(update: bool = True) -> None:

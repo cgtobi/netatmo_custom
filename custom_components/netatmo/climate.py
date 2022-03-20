@@ -392,7 +392,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
             for module in self._room.modules.values():
                 if hasattr(module, "boiler_status"):
                     module = cast(NATherm1, module)
-                    if module.boiler_status:
+                    if module.boiler_status is not None:
                         self._boilerstatus = module.boiler_status
                         break
 
