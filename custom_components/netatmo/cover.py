@@ -138,6 +138,17 @@ class NetatmoCover(NetatmoBase, CoverEntity):
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         await self._cover.async_stop()
+        self.async_write_ha_state()
+
+        if self.optimistic:
+            if self._attr_is_closing:
+                self._attr_is_closed = True
+            elif self._attr_is_opening:
+                self._attr_is_closed = False
+
+            self._attr_is_closing = None
+            self._attr_is_opening = None
+            self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover shutter to a specific position."""
