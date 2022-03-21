@@ -44,11 +44,12 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_WEATHER_SENSOR,
     SIGNAL_NAME,
 )
-from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice
+from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom
 from .helper import NetatmoArea
 from .netatmo_entity_base import NetatmoBase
 
@@ -243,7 +244,7 @@ SENSOR_TYPES_KEYS = [desc.key for desc in SENSOR_TYPES]
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the Netatmo weather and homecoach platform."""
+    """Set up the Netatmo sensor platform."""
 
     @callback
     def _create_battery_entity(netatmo_device: NetatmoDevice) -> None:
@@ -295,6 +296,23 @@ async def async_setup_entry(
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_SENSOR, _create_sensor_entity)
+    )
+
+    @callback
+    def _create_room_sensor_entity(netatmo_device: NetatmoRoom) -> None:
+        _LOGGER.debug("Adding %s sensor", netatmo_device.room.name)
+        async_add_entities(
+            [
+                NetatmoRoomSensor(netatmo_device, description)
+                for description in SENSOR_TYPES
+                if description.key in netatmo_device.room.features
+            ]
+        )
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, NETATMO_CREATE_ROOM_SENSOR, _create_room_sensor_entity
+        )
     )
 
     data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
@@ -595,6 +613,72 @@ def process_wifi(strength: int) -> str:
     if strength >= 56:
         return "High"
     return "Full"
+
+
+class NetatmoRoomSensor(NetatmoBase, SensorEntity):
+    """Implementation of a Netatmo room sensor."""
+
+    def __init__(
+        self,
+        netatmo_room: NetatmoRoom,
+        description: NetatmoSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(netatmo_room.data_handler)
+        self.entity_description = description
+
+        self._room = netatmo_room.room
+        self._id = self._room.entity_id
+
+        self._publishers.extend(
+            [
+                {
+                    "name": HOME,
+                    "home_id": netatmo_room.room.home.entity_id,
+                    SIGNAL_NAME: netatmo_room.signal_name,
+                },
+            ]
+        )
+
+        self._attr_name = f"{self._room.name} {self.entity_description.name}"
+        self._room_id = self._room.entity_id
+        self._model = f"{self._room.climate_type}"
+        self._config_url = CONF_URL_ENERGY
+
+        self._attr_unique_id = (
+            f"{self._id}-{self._room.entity_id}-{self.entity_description.key}"
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Entity created."""
+        await super().async_added_to_hass()
+
+    @callback
+    def async_update_callback(self) -> None:
+        """Update the entity's state."""
+        try:
+            key = self.entity_description.key
+
+            if (state := getattr(self._room, key)) is None:
+                return
+
+            if self.entity_description.key == "rf_strength":
+                self._attr_native_value = process_rf(state)
+            elif self.entity_description.key == "wifi_strength":
+                self._attr_native_value = process_wifi(state)
+            else:
+                self._attr_native_value = state
+        except KeyError:
+            if self.state:
+                _LOGGER.debug(
+                    "No %s data found for %s",
+                    self.entity_description.key,
+                    self._device_name,
+                )
+            self._attr_native_value = None
+            return
+
+        self.async_write_ha_state()
 
 
 class NetatmoPublicSensor(NetatmoBase, SensorEntity):

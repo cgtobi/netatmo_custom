@@ -32,6 +32,7 @@ from .const import (
     NETATMO_CREATE_CLIMATE,
     NETATMO_CREATE_COVER,
     NETATMO_CREATE_LIGHT,
+    NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SELECT,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_SWITCH,
@@ -356,6 +357,7 @@ class NetatmoDataHandler:
                         signal_home,
                     ),
                 )
+
                 for module in room.modules.values():
                     if module.device_category is NetatmoDeviceCategory.climate:
                         async_dispatcher_send(
@@ -368,17 +370,18 @@ class NetatmoDataHandler:
                                 signal_home,
                             ),
                         )
-                    if "humidity" in module.features:
-                        async_dispatcher_send(
-                            self.hass,
-                            NETATMO_CREATE_SENSOR,
-                            NetatmoDevice(
-                                self,
-                                module,
-                                room.entity_id,
-                                signal_home,
-                            ),
-                        )
+
+                if "humidity" in room.features:
+                    async_dispatcher_send(
+                        self.hass,
+                        NETATMO_CREATE_ROOM_SENSOR,
+                        NetatmoRoom(
+                            self,
+                            room,
+                            room.entity_id,
+                            signal_home,
+                        ),
+                    )
 
     def setup_climate_schedule_select(
         self, home: pyatmo.Home, signal_home: str

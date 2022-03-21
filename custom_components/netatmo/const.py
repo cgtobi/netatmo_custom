@@ -37,6 +37,7 @@ NETATMO_CREATE_COVER = "netatmo_create_cover"
 NETATMO_CREATE_WEATHER_SENSOR = "netatmo_create_weather_sensor"
 NETATMO_CREATE_SENSOR = "netatmo_create_sensor"
 NETATMO_CREATE_SWITCH = "netatmo_create_switch"
+NETATMO_CREATE_ROOM_SENSOR = "netatmo_create_room_sensor"
 
 
 CONF_CLOUDHOOK_URL = "cloudhook_url"
