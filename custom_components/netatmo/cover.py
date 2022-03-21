@@ -152,7 +152,7 @@ class NetatmoCover(NetatmoBase, CoverEntity):
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover shutter to a specific position."""
-        await self._cover.async_set_target_position(100 - kwargs[ATTR_POSITION])
+        await self._cover.async_set_target_position(kwargs[ATTR_POSITION])
 
     @property
     def device_class(self) -> str:
