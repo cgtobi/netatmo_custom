@@ -368,6 +368,17 @@ class NetatmoDataHandler:
                                 signal_home,
                             ),
                         )
+                    if "humidity" in module.features:
+                        async_dispatcher_send(
+                            self.hass,
+                            NETATMO_CREATE_SENSOR,
+                            NetatmoDevice(
+                                self,
+                                module,
+                                room.entity_id,
+                                signal_home,
+                            ),
+                        )
 
     def setup_climate_schedule_select(
         self, home: pyatmo.Home, signal_home: str
