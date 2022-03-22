@@ -11,7 +11,6 @@ from .modules.device_types import DeviceType
 
 if TYPE_CHECKING:
     from .home import Home
-    from .modules.device_types import DeviceCategory
     from .modules.module import Module
 
 LOG = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ class Room(NetatmoBase):
 
     modules: dict[str, Module]
     device_types: set[DeviceType]
-    features: set[DeviceCategory]
+    features: set[str]
 
     climate_type: DeviceType | None = None
 
@@ -66,7 +65,7 @@ class Room(NetatmoBase):
         for module in self.modules.values():
             self.device_types.add(module.device_type)
             if module.device_category is not None:
-                self.features.add(module.device_category)
+                self.features.add(module.device_category.name)
 
         if "NRV" in self.device_types:
             self.climate_type = DeviceType.NRV
