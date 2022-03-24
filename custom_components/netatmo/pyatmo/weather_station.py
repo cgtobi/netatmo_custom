@@ -7,12 +7,10 @@ from abc import ABC
 from collections import defaultdict
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
-from .helpers import _BASE_URL, extract_raw_data, today_stamps
+from .const import _GETMEASURE_REQ, _GETSTATIONDATA_REQ
+from .helpers import extract_raw_data, today_stamps
 
 LOG = logging.getLogger(__name__)
-
-_GETMEASURE_REQ = _BASE_URL + "api/getmeasure"
-_GETSTATIONDATA_REQ = _BASE_URL + "api/getstationsdata"
 
 
 class AbstractWeatherStationData(ABC):
@@ -168,15 +166,15 @@ class AbstractWeatherStationData(ABC):
 
                 # For potential use, add battery and radio coverage information
                 # to module data if present
-                for i in (
+                for val in (
                     "rf_status",
                     "battery_vp",
                     "battery_percent",
                     "reachable",
                     "wifi_status",
                 ):
-                    if i in module:
-                        last_data[module[key]][i] = module[i]
+                    if val in module:
+                        last_data[module[key]][val] = module[val]
 
         return last_data
 

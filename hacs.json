@@ -6,6 +6,8 @@
     "climate",
     "light",
     "select",
-    "sensor"
+    "sensor",
+    "cover",
+    "switch"
   ]
 }
