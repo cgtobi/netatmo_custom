@@ -8,7 +8,6 @@ import secrets
 
 import aiohttp
 from . import pyatmo
-from .pyatmo.const import ALL_SCOPES as NETATMO_SCOPES
 import voluptuous as vol
 
 from homeassistant.components import cloud
@@ -48,6 +47,7 @@ from .const import (
     DATA_PERSONS,
     DATA_SCHEDULES,
     DOMAIN,
+    NETATMO_SCOPES,
     OAUTH2_AUTHORIZE,
     OAUTH2_TOKEN,
     PLATFORMS,
@@ -141,8 +141,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     data_handler = NetatmoDataHandler(hass, entry)
-    hass.async_create_task(data_handler.async_setup())
+    await data_handler.async_setup()
     hass.data[DOMAIN][entry.entry_id][DATA_HANDLER] = data_handler
+
+    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     async def unregister_webhook(
         call_or_event_or_dt: ServiceCall | Event | datetime | None,

@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 import uuid
 
-from .pyatmo.const import ALL_SCOPES
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -24,6 +23,7 @@ from .const import (
     CONF_UUID,
     CONF_WEATHER_AREAS,
     DOMAIN,
+    NETATMO_SCOPES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class NetatmoFlowHandler(
     @property
     def extra_authorize_data(self) -> dict:
         """Extra data that needs to be appended to the authorize url."""
-        return {"scope": " ".join(ALL_SCOPES)}
+        return {"scope": " ".join(NETATMO_SCOPES)}
 
     async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         """Handle a flow start."""

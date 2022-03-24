@@ -1,7 +1,8 @@
-"""Support for Netatmo air care devices."""
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
-from .const import _GETHOMECOACHDATA_REQ
+from .helpers import _BASE_URL
 from .weather_station import AsyncWeatherStationData, WeatherStationData
+
+_GETHOMECOACHDATA_REQ = _BASE_URL + "api/gethomecoachsdata"
 
 
 class HomeCoachData(WeatherStationData):

@@ -11,6 +11,19 @@ from .exceptions import NoDevice
 
 LOG: logging.Logger = logging.getLogger(__name__)
 
+_BASE_URL: str = "https://api.netatmo.com/"
+
+ERRORS: dict[int, str] = {
+    400: "Bad request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not found",
+    406: "Not Acceptable",
+    500: "Internal Server Error",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+}
+
 
 def to_time_string(value: str) -> str:
     return datetime.utcfromtimestamp(int(value)).isoformat(sep="_")
@@ -62,11 +75,6 @@ def extract_raw_data(resp: Any, tag: str) -> dict:
 
 def extract_raw_data_new(resp: Any, tag: str) -> dict:
     """Extract raw data from server response."""
-    raw_data: dict | list = {}
-
-    if tag == "body":
-        return {"public": resp["body"], "errors": []}
-
     if resp is None or "body" not in resp or tag not in resp["body"]:
         LOG.debug("Server response: %s", resp)
         raise NoDevice("No device found, errors in response")
