@@ -16,7 +16,6 @@ from .const import (
     CONF_URL_SECURITY,
     DOMAIN,
     EVENT_TYPE_LIGHT_MODE,
-    MANUFACTURER,
     NETATMO_CREATE_LIGHT,
     WEBHOOK_LIGHT_MODE,
     WEBHOOK_PUSH_TYPE,
@@ -63,7 +62,7 @@ class NetatmoLight(NetatmoBase, LightEntity):
         self._id = self._camera.entity_id
         self._home_id = self._camera.home.entity_id
         self._device_name = self._camera.name
-        self._attr_name = f"{MANUFACTURER} {self._device_name}"
+        self._attr_name = f"{self._device_name}"
         self._model = self._camera.device_type
         self._config_url = CONF_URL_SECURITY
         self._is_on = False

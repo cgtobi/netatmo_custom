@@ -14,7 +14,6 @@ from .const import (
     DATA_SCHEDULES,
     DOMAIN,
     EVENT_TYPE_SCHEDULE,
-    MANUFACTURER,
     NETATMO_CREATE_SELECT,
 )
 from .data_handler import HOME, SIGNAL_NAME, NetatmoHome
@@ -66,7 +65,7 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
         )
 
         self._device_name = self._home.name
-        self._attr_name = f"{MANUFACTURER} {self._device_name}"
+        self._attr_name = f"{self._device_name}"
 
         self._model: str = "NATherm1"
         self._config_url = CONF_URL_ENERGY

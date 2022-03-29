@@ -10,13 +10,7 @@ from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
-from .const import (
-    DATA_DEVICE_IDS,
-    DEFAULT_ATTRIBUTION,
-    DOMAIN,
-    MANUFACTURER,
-    SIGNAL_NAME,
-)
+from .const import DATA_DEVICE_IDS, DEFAULT_ATTRIBUTION, DOMAIN, SIGNAL_NAME
 from .data_handler import PUBLIC, NetatmoDataHandler
 
 
@@ -92,10 +86,13 @@ class NetatmoBase(Entity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info for the sensor."""
+        manufacturer, model = DEVICE_DESCRIPTION_MAP[
+            getattr(NetatmoDeviceType, self._model)
+        ]
         return DeviceInfo(
             configuration_url=self._config_url,
             identifiers={(DOMAIN, self._id)},
             name=self._device_name,
-            manufacturer=MANUFACTURER,
-            model=DEVICE_DESCRIPTION_MAP[getattr(NetatmoDeviceType, self._model)],
+            manufacturer=manufacturer,
+            model=model,
         )
