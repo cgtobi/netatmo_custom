@@ -48,7 +48,6 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
         netatmo_home: NetatmoHome,
     ) -> None:
         """Initialize the select entity."""
-        print("NetatmoScheduleSelect", netatmo_home.signal_name)
         SelectEntity.__init__(self)
         super().__init__(netatmo_home.data_handler)
 

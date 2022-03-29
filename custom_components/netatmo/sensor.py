@@ -60,10 +60,12 @@ SUPPORTED_PUBLIC_SENSOR_TYPES: tuple[str, ...] = (
     "pressure",
     "humidity",
     "rain",
-    "windstrength",
-    "guststrength",
+    "wind_strength",
+    "gust_strength",
     "sum_rain_1",
     "sum_rain_24",
+    "wind_angle",
+    "gust_angle",
 )
 
 
@@ -783,10 +785,14 @@ class NetatmoPublicSensor(NetatmoBase, SensorEntity):
             data = self._station.get_60_min_rain()
         elif self.entity_description.key == "sum_rain_24":
             data = self._station.get_24_h_rain()
-        elif self.entity_description.key == "windstrength":
+        elif self.entity_description.key == "wind_strength":
             data = self._station.get_latest_wind_strengths()
-        elif self.entity_description.key == "guststrength":
+        elif self.entity_description.key == "gust_strength":
             data = self._station.get_latest_gust_strengths()
+        elif self.entity_description.key == "wind_angle":
+            data = self._station.get_latest_wind_angles()
+        elif self.entity_description.key == "gust_angle":
+            data = self._station.get_latest_gust_angles()
 
         if not data:
             if self.available:
