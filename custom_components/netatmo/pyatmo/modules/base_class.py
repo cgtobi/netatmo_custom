@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Iterable
 
 from ..modules.device_types import DeviceType
 
@@ -22,6 +23,7 @@ NETATMO_ATTRIBUTES_MAP = {
     "reachable": lambda x, _: x.get("reachable", False),
     "monitoring": lambda x, _: x.get("monitoring", False) == "on",
     "battery_level": lambda x, y: x.get("battery_vp", x.get("battery_level")),
+    "place": lambda x, _: Place(x.get("place")),
 }
 
 
@@ -57,3 +59,38 @@ class NetatmoBase(EntityBase, ABC):
             key: NETATMO_ATTRIBUTES_MAP.get(key, default(key, val))(raw_data, val)
             for key, val in self.__dict__.items()
         }
+
+
+@dataclass
+class Location:
+    latitude: float
+    longitude: float
+
+    def __init__(self, longitude: float, latitude: float) -> None:
+        self.latitude = latitude
+        self.longitude = longitude
+
+    def __iter__(self) -> Iterable:
+        yield self.longitude
+        yield self.latitude
+
+
+@dataclass
+class Place:
+    altitude: int | None
+    city: str | None
+    country: str | None
+    timezone: str | None
+    location: Location | None
+
+    def __init__(
+        self,
+        data: dict,
+    ) -> None:
+        if data is None:
+            return
+        self.altitude = data.get("altitude")
+        self.city = data.get("city")
+        self.country = data.get("country")
+        self.timezone = data.get("timezone")
+        self.location = Location(*list(data.get("location", [])))

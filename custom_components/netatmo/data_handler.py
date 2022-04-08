@@ -278,6 +278,7 @@ class NetatmoDataHandler:
         await self.subscribe(AIR_CARE, AIR_CARE, None)
 
         self.setup_air_care()
+        self.setup_favorites()
 
         for home in self.account.homes.values():
             signal_home = f"{HOME}-{home.entity_id}"
@@ -292,6 +293,21 @@ class NetatmoDataHandler:
             self.hass.data[DOMAIN][DATA_PERSONS][home.entity_id] = {
                 person.entity_id: person.pseudo for person in home.persons.values()
             }
+
+    def setup_favorites(self) -> None:
+        """Set up favorites weather modules."""
+        for module in self.account.modules.values():
+            if module.device_category is NetatmoDeviceCategory.weather:
+                async_dispatcher_send(
+                    self.hass,
+                    NETATMO_CREATE_WEATHER_SENSOR,
+                    NetatmoDevice(
+                        self,
+                        module,
+                        WEATHER,
+                        WEATHER,
+                    ),
+                )
 
     def setup_air_care(self) -> None:
         """Set up home coach/air care modules."""

@@ -30,7 +30,6 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo camera light platform."""
-    print("Setup of light platform")
 
     @callback
     def _create_entity(netatmo_device: NetatmoDevice) -> None:

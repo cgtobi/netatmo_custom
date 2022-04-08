@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -27,15 +26,22 @@ if TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 
 
-class AbstractAccount(ABC):
-    """Abstract class of a Netatmo account."""
+class AsyncAccount:
+    """Async class of a Netatmo account."""
 
-    auth: AbstractAsyncAuth
-    user: str | None
-    homes: dict[str, Home]
-    raw_data: dict
-    favorite_stations: bool
-    public_weather_areas: dict[str, modules.PublicWeatherArea]
+    def __init__(self, auth: AbstractAsyncAuth, favorite_stations: bool = True) -> None:
+        """Initialize the Netatmo account.
+
+        Arguments:
+            auth {AbstractAsyncAuth} -- Authentication information with a valid access token
+        """
+        self.auth: AbstractAsyncAuth = auth
+        self.user: str | None
+        self.homes: dict[str, Home] = {}
+        self.raw_data: dict
+        self.favorite_stations: bool = favorite_stations
+        self.public_weather_areas: dict[str, modules.PublicWeatherArea] = {}
+        self.modules: dict[str, Module] = {}
 
     def __repr__(self) -> str:
         return (
@@ -49,22 +55,6 @@ class AbstractAccount(ABC):
                 self.homes[home_id].update_topology(home)
             else:
                 self.homes[home_id] = Home(self.auth, raw_data=home)
-
-
-class AsyncAccount(AbstractAccount):
-    """Async class of a Netatmo account."""
-
-    def __init__(self, auth: AbstractAsyncAuth, favorite_stations: bool = True) -> None:
-        """Initialize the Netatmo account.
-
-        Arguments:
-            auth {AbstractAsyncAuth} -- Authentication information with a valid access token
-        """
-        self.auth = auth
-        self.homes: dict[str, Home] = {}
-        self.favorite_stations = favorite_stations
-        self.public_weather_areas = {}
-        self.modules: dict[str, Module] = {}
 
     async def async_update_topology(self) -> None:
         """Retrieve topology data from /homesdata."""
@@ -193,14 +183,20 @@ class AsyncAccount(AbstractAccount):
                 if home_id not in self.homes:
                     continue
                 await self.homes[home_id].update(
-                    {HOME: {"modules": [fix_weather_attributes(device_data)]}},
+                    {HOME: {"modules": [normalize_weather_attributes(device_data)]}},
                 )
             for module_data in device_data.get("modules", []):
                 await self.update_devices({"devices": [module_data]})
 
-            if device_data["type"] == "NHC":
-                device_data["name"] = device_data["station_name"]
-                device_data = fix_weather_attributes(device_data)
+            if (
+                device_data["type"] == "NHC"
+                or self.find_home_of_device(device_data) is None
+            ):
+                device_data["name"] = device_data.get(
+                    "station_name",
+                    device_data.get("module_name", "Unknown"),
+                )
+                device_data = normalize_weather_attributes(device_data)
                 if device_data["id"] not in self.modules:
                     self.modules[device_data["id"]] = getattr(
                         modules,
@@ -210,6 +206,11 @@ class AsyncAccount(AbstractAccount):
                         module=device_data,
                     )
                 await self.modules[device_data["id"]].update(device_data)
+
+                if device_data.get("modules", []):
+                    self.modules[device_data["id"]].modules = [
+                        module["_id"] for module in device_data["modules"]
+                    ]
 
         if area_id is not None:
             self.public_weather_areas[area_id].update(raw_data)
@@ -241,11 +242,12 @@ ATTRIBUTES_TO_FIX = {
 }
 
 
-def fix_weather_attributes(raw_data) -> dict:
+def normalize_weather_attributes(raw_data) -> dict:
+    """Normalize weather attributes."""
     result: dict = {}
     for attribute, value in raw_data.items():
         if attribute == "dashboard_data":
-            result.update(**fix_weather_attributes(value))
+            result.update(**normalize_weather_attributes(value))
         else:
             result[ATTRIBUTES_TO_FIX.get(attribute, attribute)] = value
     return result

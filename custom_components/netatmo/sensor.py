@@ -42,7 +42,6 @@ from .const import (
     CONF_WEATHER_AREAS,
     DATA_HANDLER,
     DOMAIN,
-    MANUFACTURER,
     NETATMO_CREATE_BATTERY,
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
@@ -407,10 +406,22 @@ class NetatmoWeatherSensor(NetatmoBase, SensorEntity):
             ]
         )
 
-        self._attr_name = f"{MANUFACTURER} {self._device_name} {description.name}"
+        self._attr_name = f"{self._device_name} {description.name}"
         self._model = self._module.device_type
         self._config_url = CONF_URL_WEATHER
         self._attr_unique_id = f"{self._id}-{description.key}"
+
+        if hasattr(self._module, "place"):
+            place = cast(
+                pyatmo.modules.base_class.Place, getattr(self._module, "place")
+            )
+            if hasattr(place, "location") and place.location is not None:
+                self._attr_extra_state_attributes.update(
+                    {
+                        ATTR_LATITUDE: place.location.latitude,
+                        ATTR_LONGITUDE: place.location.longitude,
+                    }
+                )
 
     async def async_added_to_hass(self) -> None:
         """Entity created."""
@@ -718,7 +729,7 @@ class NetatmoPublicSensor(NetatmoBase, SensorEntity):
         self._area_name = area.area_name
         self._id = self._area_name
         self._device_name = f"{self._area_name}"
-        self._attr_name = f"{MANUFACTURER} {self._device_name} {description.name}"
+        self._attr_name = f"{self._device_name} {description.name}"
         self._show_on_map = area.show_on_map
         self._attr_unique_id = (
             f"{self._device_name.replace(' ', '-')}-{description.key}"

@@ -41,7 +41,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Netatmo cover platform."""
-    print("Setup of cover platform")
 
     @callback
     def _create_entity(netatmo_device: NetatmoDevice) -> None:
