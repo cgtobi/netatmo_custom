@@ -12,19 +12,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (  # ATTR_HEATING_POWER_REQUEST,; ATTR_SCHEDULE_NAME,; ATTR_SELECTED_SCHEDULE,; CONF_URL_ENERGY,; DATA_HOMES,; DATA_SCHEDULES,; EVENT_TYPE_CANCEL_SET_POINT,; EVENT_TYPE_SCHEDULE,; EVENT_TYPE_SET_POINT,; EVENT_TYPE_THERM_MODE,; NETATMO_CREATE_BATTERY,; SERVICE_SET_SCHEDULE,
-    CONF_URL_CONTROL,
-    NETATMO_CREATE_SWITCH,
-)
+from .const import CONF_URL_CONTROL, NETATMO_CREATE_SWITCH
 from .data_handler import HOME, SIGNAL_NAME, NetatmoDevice
 from .netatmo_entity_base import NetatmoBase
-
-# from .pyatmo import modules as NaModules
-# from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
-
-
-# from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,11 +73,6 @@ class NetatmoSwitch(NetatmoBase, SwitchEntity):
     async def async_added_to_hass(self) -> None:
         """Entity created."""
         await super().async_added_to_hass()
-
-    # @property
-    # def is_on(self) -> bool | None:
-    #     """Return the state of the sensor."""
-    #     return self._switch.on
 
     @callback
     def async_update_callback(self) -> None:
