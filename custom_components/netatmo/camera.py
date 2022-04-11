@@ -99,12 +99,7 @@ class NetatmoCamera(NetatmoBase, Camera):
         self._config_url = CONF_URL_SECURITY
         self._attr_unique_id = f"{self._id}-{self._model}"
         self._quality = DEFAULT_QUALITY
-        self._vpnurl: str | None = None
-        self._localurl: str | None = None
         self._monitoring: bool | None = None
-        self._sd_status: int | None = None
-        self._alim_status: int | None = None
-        self._is_local: bool | None = None
         self._light_state = None
         self._attr_brand = MANUFACTURER
 
@@ -210,13 +205,8 @@ class NetatmoCamera(NetatmoBase, Camera):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        self._vpnurl = self._camera.vpn_url
-        self._localurl = self._camera.local_url
-        self._sd_status = self._camera.sd_status
-        self._alim_status = self._camera.alim_status
-        self._is_local = self._camera.is_local
-        self._attr_is_on = self._alim_status is not None
-        self._attr_available = self._alim_status is not None
+        self._attr_is_on = self._camera.alim_status is not None
+        self._attr_available = self._camera.alim_status is not None
 
         if self._camera.monitoring is not None:
             self._attr_is_streaming = self._camera.monitoring
@@ -230,11 +220,11 @@ class NetatmoCamera(NetatmoBase, Camera):
             {
                 "id": self._id,
                 "monitoring": self._monitoring,
-                "sd_status": self._sd_status,
-                "alim_status": self._alim_status,
-                "is_local": self._is_local,
-                "vpn_url": self._vpnurl,
-                "local_url": self._localurl,
+                "sd_status": self._camera.sd_status,
+                "alim_status": self._camera.alim_status,
+                "is_local": self._camera.is_local,
+                "vpn_url": self._camera.vpn_url,
+                "local_url": self._camera.local_url,
                 "light_state": self._light_state,
             }
         )
@@ -257,9 +247,9 @@ class NetatmoCamera(NetatmoBase, Camera):
 
     def get_video_url(self, video_id: str) -> str:
         """Get video url."""
-        if self._is_local:
-            return f"{self._localurl}/vod/{video_id}/files/{self._quality}/index.m3u8"
-        return f"{self._vpnurl}/vod/{video_id}/files/{self._quality}/index.m3u8"
+        if self._camera.is_local:
+            return f"{self._camera.local_url}/vod/{video_id}/files/{self._quality}/index.m3u8"
+        return f"{self._camera.vpn_url}/vod/{video_id}/files/{self._quality}/index.m3u8"
 
     def fetch_person_ids(self, persons: list[str | None]) -> list[str]:
         """Fetch matching person ids for give list of persons."""

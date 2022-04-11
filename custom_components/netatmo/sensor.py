@@ -1,4 +1,4 @@
-"""Support for the Netatmo Weather Service."""
+"""Support for the Netatmo sensors."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -139,7 +139,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         name="Rain last hour",
         entity_registry_enabled_default=False,
         native_unit_of_measurement=LENGTH_MILLIMETERS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         icon="mdi:weather-rainy",
     ),
     NetatmoSensorEntityDescription(
