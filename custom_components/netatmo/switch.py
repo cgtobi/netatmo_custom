@@ -48,7 +48,7 @@ class NetatmoSwitch(NetatmoBase, SwitchEntity):
         SwitchEntity.__init__(self)
         super().__init__(netatmo_device.data_handler)
 
-        self._switch = cast(NaModules.Plug, netatmo_device.device)
+        self._switch = cast(NaModules.Switch, netatmo_device.device)
 
         self._id = self._switch.entity_id
         self._attr_name = self._device_name = self._switch.name
