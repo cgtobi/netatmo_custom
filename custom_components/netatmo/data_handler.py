@@ -29,6 +29,7 @@ from .const import (
     MANUFACTURER,
     NETATMO_CREATE_BATTERY,
     NETATMO_CREATE_CAMERA,
+    NETATMO_CREATE_CAMERA_LIGHT,
     NETATMO_CREATE_CLIMATE,
     NETATMO_CREATE_COVER,
     NETATMO_CREATE_LIGHT,
@@ -327,9 +328,16 @@ class NetatmoDataHandler:
     def setup_modules(self, home: pyatmo.Home, signal_home: str) -> None:
         """Set up modules."""
         netatmo_type_signal_map = {
-            NetatmoDeviceCategory.camera: [NETATMO_CREATE_CAMERA, NETATMO_CREATE_LIGHT],
+            NetatmoDeviceCategory.camera: [
+                NETATMO_CREATE_CAMERA,
+                NETATMO_CREATE_CAMERA_LIGHT,
+            ],
+            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT],
             NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
-            NetatmoDeviceCategory.plug: [NETATMO_CREATE_SWITCH, NETATMO_CREATE_SENSOR],
+            NetatmoDeviceCategory.switch: [
+                NETATMO_CREATE_SWITCH,
+                NETATMO_CREATE_SENSOR,
+            ],
             NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR],
         }
         for module in home.modules.values():
