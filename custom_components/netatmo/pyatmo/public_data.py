@@ -8,7 +8,7 @@ from typing import Any
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
-    _GETPUBLIC_DATA,
+    _GETPUBLIC_DATA_ENDPOINT,
     ACCESSORY_GUST_ANGLE_TYPE,
     ACCESSORY_GUST_STRENGTH_TYPE,
     ACCESSORY_RAIN_24H_TYPE,
@@ -172,7 +172,10 @@ class PublicData(AbstractPublicData):
         if self.required_data_type:
             post_params["required_data"] = self.required_data_type
 
-        resp = self.auth.post_request(url=_GETPUBLIC_DATA, params=post_params).json()
+        resp = self.auth.post_api_request(
+            endpoint=_GETPUBLIC_DATA_ENDPOINT,
+            params=post_params,
+        ).json()
         try:
             self.raw_data = resp["body"]
         except (KeyError, TypeError) as exc:
@@ -221,8 +224,8 @@ class AsyncPublicData(AbstractPublicData):
         if self.required_data_type:
             post_params["required_data"] = self.required_data_type
 
-        resp = await self.auth.async_post_request(
-            url=_GETPUBLIC_DATA,
+        resp = await self.auth.async_post_api_request(
+            endpoint=_GETPUBLIC_DATA_ENDPOINT,
             params=post_params,
         )
         assert not isinstance(resp, bytes)

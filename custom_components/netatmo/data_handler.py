@@ -279,7 +279,6 @@ class NetatmoDataHandler:
         await self.subscribe(AIR_CARE, AIR_CARE, None)
 
         self.setup_air_care()
-        self.setup_favorites()
 
         for home in self.account.homes.values():
             signal_home = f"{HOME}-{home.entity_id}"

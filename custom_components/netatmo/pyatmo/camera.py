@@ -12,12 +12,12 @@ from requests.exceptions import ReadTimeout
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
-    _GETCAMERAPICTURE_REQ,
-    _GETEVENTSUNTIL_REQ,
-    _GETHOMEDATA_REQ,
-    _SETPERSONSAWAY_REQ,
-    _SETPERSONSHOME_REQ,
-    _SETSTATE_REQ,
+    _GETCAMERAPICTURE_ENDPOINT,
+    _GETEVENTSUNTIL_ENDPOINT,
+    _GETHOMEDATA_ENDPOINT,
+    _SETPERSONSAWAY_ENDPOINT,
+    _SETPERSONSHOME_ENDPOINT,
+    _SETSTATE_ENDPOINT,
 )
 from .exceptions import ApiError, NoDevice
 from .helpers import LOG, extract_raw_data
@@ -103,19 +103,21 @@ class AbstractCameraData(ABC):
 
     def get_camera(self, camera_id: str) -> dict[str, str]:
         """Get camera data."""
-        for home_id in self.cameras:
-            if camera_id in self.cameras[home_id]:
-                return self.cameras[home_id][camera_id]
-
-        return {}
+        return next(
+            (
+                self.cameras[home_id][camera_id]
+                for home_id in self.cameras
+                if camera_id in self.cameras[home_id]
+            ),
+            {},
+        )
 
     def get_camera_home_id(self, camera_id: str) -> str | None:
         """Get camera data."""
-        for home_id in self.cameras:
-            if camera_id in self.cameras[home_id]:
-                return home_id
-
-        return None
+        return next(
+            (home_id for home_id in self.cameras if camera_id in self.cameras[home_id]),
+            None,
+        )
 
     def get_module(self, module_id: str) -> dict | None:
         """Get module data."""
@@ -123,11 +125,14 @@ class AbstractCameraData(ABC):
 
     def get_smokedetector(self, smoke_id: str) -> dict | None:
         """Get smoke detector."""
-        for home_id in self.smoke_detectors:
-            if smoke_id in self.smoke_detectors[home_id]:
-                return self.smoke_detectors[home_id][smoke_id]
-
-        return None
+        return next(
+            (
+                self.smoke_detectors[home_id][smoke_id]
+                for home_id in self.smoke_detectors
+                if smoke_id in self.smoke_detectors[home_id]
+            ),
+            None,
+        )
 
     def camera_urls(self, camera_id: str) -> tuple[str | None, str | None]:
         """
@@ -156,11 +161,14 @@ class AbstractCameraData(ABC):
 
     def get_person_id(self, name: str, home_id: str) -> str | None:
         """Retrieve the ID of a person."""
-        for pid, data in self.persons[home_id].items():
-            if name == data.get("pseudo"):
-                return pid
-
-        return None
+        return next(
+            (
+                pid
+                for pid, data in self.persons[home_id].items()
+                if name == data.get("pseudo")
+            ),
+            None,
+        )
 
     def build_event_id(self, event_id: str | None, device_type: str | None):
         """Build event id."""
@@ -457,7 +465,10 @@ class CameraData(AbstractCameraData):
 
     def update(self, events: int = 30) -> None:
         """Fetch and process data from API."""
-        resp = self.auth.post_request(url=_GETHOMEDATA_REQ, params={"size": events})
+        resp = self.auth.post_api_request(
+            endpoint=_GETHOMEDATA_ENDPOINT,
+            params={"size": events},
+        )
 
         self.raw_data = extract_raw_data(resp.json(), "homes")
         self.process()
@@ -481,8 +492,7 @@ class CameraData(AbstractCameraData):
             return
 
         if (vpn_url := camera_data.get("vpn_url")) and camera_data.get("is_local"):
-            temp_local_url = self._check_url(vpn_url)
-            if temp_local_url:
+            if temp_local_url := self._check_url(vpn_url):
                 self.cameras[home_id][camera_id]["local_url"] = self._check_url(
                     temp_local_url,
                 )
@@ -529,7 +539,10 @@ class CameraData(AbstractCameraData):
         }
 
         try:
-            resp = self.auth.post_request(url=_SETSTATE_REQ, params=post_params).json()
+            resp = self.auth.post_api_request(
+                endpoint=_SETSTATE_ENDPOINT,
+                params=post_params,
+            ).json()
         except ApiError as err_msg:
             LOG.error("%s", err_msg)
             return False
@@ -546,16 +559,16 @@ class CameraData(AbstractCameraData):
         post_params: dict[str, str | list] = {"home_id": home_id}
         if person_ids:
             post_params["person_ids[]"] = person_ids
-        return self.auth.post_request(
-            url=_SETPERSONSHOME_REQ,
+        return self.auth.post_api_request(
+            endpoint=_SETPERSONSHOME_ENDPOINT,
             params=post_params,
         ).json()
 
     def set_persons_away(self, home_id: str, person_id: str | None = None):
         """Mark a person as away or set the whole home to being empty."""
         post_params = {"home_id": home_id, "person_id": person_id}
-        return self.auth.post_request(
-            url=_SETPERSONSAWAY_REQ,
+        return self.auth.post_api_request(
+            endpoint=_SETPERSONSAWAY_ENDPOINT,
             params=post_params,
         ).json()
 
@@ -566,8 +579,8 @@ class CameraData(AbstractCameraData):
     ) -> tuple[bytes, str | None]:
         """Download a specific image (of an event or user face) from the camera."""
         post_params = {"image_id": image_id, "key": key}
-        resp = self.auth.post_request(
-            url=_GETCAMERAPICTURE_REQ,
+        resp = self.auth.post_api_request(
+            endpoint=_GETCAMERAPICTURE_ENDPOINT,
             params=post_params,
         ).content
         image_type = imghdr.what("NONE.FILE", resp)
@@ -605,8 +618,8 @@ class CameraData(AbstractCameraData):
         event_list: list = []
         resp: dict[str, Any] | None = None
         try:
-            resp = self.auth.post_request(
-                url=_GETEVENTSUNTIL_REQ,
+            resp = self.auth.post_api_request(
+                endpoint=_GETEVENTSUNTIL_ENDPOINT,
                 params=post_params,
             ).json()
             if resp is not None:
@@ -637,8 +650,8 @@ class AsyncCameraData(AbstractCameraData):
 
     async def async_update(self, events: int = 30) -> None:
         """Fetch and process data from API."""
-        resp = await self.auth.async_post_request(
-            url=_GETHOMEDATA_REQ,
+        resp = await self.auth.async_post_api_request(
+            endpoint=_GETHOMEDATA_ENDPOINT,
             params={"size": events},
         )
 
@@ -689,8 +702,8 @@ class AsyncCameraData(AbstractCameraData):
         }
 
         try:
-            resp = await self.auth.async_post_request(
-                url=_SETSTATE_REQ,
+            resp = await self.auth.async_post_api_request(
+                endpoint=_SETSTATE_ENDPOINT,
                 params=post_params,
             )
         except ApiError as err_msg:
@@ -750,8 +763,8 @@ class AsyncCameraData(AbstractCameraData):
         post_params: dict[str, str | list] = {"home_id": home_id}
         if person_ids:
             post_params["person_ids[]"] = person_ids
-        return await self.auth.async_post_request(
-            url=_SETPERSONSHOME_REQ,
+        return await self.auth.async_post_api_request(
+            endpoint=_SETPERSONSHOME_ENDPOINT,
             params=post_params,
         )
 
@@ -760,8 +773,8 @@ class AsyncCameraData(AbstractCameraData):
         post_params = {"home_id": home_id}
         if person_id:
             post_params["person_id"] = person_id
-        return await self.auth.async_post_request(
-            url=_SETPERSONSAWAY_REQ,
+        return await self.auth.async_post_api_request(
+            endpoint=_SETPERSONSAWAY_ENDPOINT,
             params=post_params,
         )
 
@@ -771,7 +784,7 @@ class AsyncCameraData(AbstractCameraData):
         if not local and not vpn:
             return None
         resp = await self.auth.async_get_image(
-            url=f"{(local or vpn)}/live/snapshot_720.jpg",
+            endpoint=f"{(local or vpn)}/live/snapshot_720.jpg",
             timeout=10,
         )
 
@@ -788,7 +801,7 @@ class AsyncCameraData(AbstractCameraData):
         """Download a specific image (of an event or user face) from the camera."""
         post_params = {"image_id": image_id, "key": key}
         resp = await self.auth.async_get_image(
-            url=_GETCAMERAPICTURE_REQ,
+            endpoint=_GETCAMERAPICTURE_ENDPOINT,
             params=post_params,
         )
 

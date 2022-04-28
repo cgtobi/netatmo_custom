@@ -12,37 +12,35 @@ ERRORS: dict[int, str] = {
     503: "Service Unavailable",
 }
 
-_BASE_URL: str = "https://api.netatmo.com/"
+_DEFAULT_BASE_URL: str = "https://api.netatmo.com/"
 
 # Endpoints
 AUTH_REQ_ENDPOINT = "oauth2/token"
-AUTH_REQ = _BASE_URL + AUTH_REQ_ENDPOINT
 AUTH_URL_ENDPOINT = "oauth2/authorize"
-AUTH_URL = _BASE_URL + AUTH_URL_ENDPOINT
-WEBHOOK_URL_ADD = _BASE_URL + "api/addwebhook"
-WEBHOOK_URL_DROP = _BASE_URL + "api/dropwebhook"
+WEBHOOK_URL_ADD_ENDPOINT = "api/addwebhook"
+WEBHOOK_URL_DROP_ENDPOINT = "api/dropwebhook"
 
-_GETHOMESDATA_REQ = _BASE_URL + "api/homesdata"
-_GETHOMESTATUS_REQ = _BASE_URL + "api/homestatus"
-_GETEVENTS_REQ = _BASE_URL + "api/getevents"
-_SETTHERMMODE_REQ = _BASE_URL + "api/setthermmode"
-_SETROOMTHERMPOINT_REQ = _BASE_URL + "api/setroomthermpoint"
-_GETROOMMEASURE_REQ = _BASE_URL + "api/getroommeasure"
-_SWITCHHOMESCHEDULE_REQ = _BASE_URL + "api/switchhomeschedule"
+_GETHOMESDATA_ENDPOINT = "api/homesdata"
+_GETHOMESTATUS_ENDPOINT = "api/homestatus"
+_GETEVENTS_ENDPOINT = "api/getevents"
+_SETTHERMMODE_ENDPOINT = "api/setthermmode"
+_SETROOMTHERMPOINT_ENDPOINT = "api/setroomthermpoint"
+_GETROOMMEASURE_ENDPOINT = "api/getroommeasure"
+_SWITCHHOMESCHEDULE_ENDPOINT = "api/switchhomeschedule"
 
-_GETHOMEDATA_REQ = _BASE_URL + "api/gethomedata"
-_GETCAMERAPICTURE_REQ = _BASE_URL + "api/getcamerapicture"
-_GETEVENTSUNTIL_REQ = _BASE_URL + "api/geteventsuntil"
-_SETPERSONSAWAY_REQ = _BASE_URL + "api/setpersonsaway"
-_SETPERSONSHOME_REQ = _BASE_URL + "api/setpersonshome"
-_SETSTATE_REQ = _BASE_URL + "api/setstate"
+_GETHOMEDATA_ENDPOINT = "api/gethomedata"
+_GETCAMERAPICTURE_ENDPOINT = "api/getcamerapicture"
+_GETEVENTSUNTIL_ENDPOINT = "api/geteventsuntil"
+_SETPERSONSAWAY_ENDPOINT = "api/setpersonsaway"
+_SETPERSONSHOME_ENDPOINT = "api/setpersonshome"
+_SETSTATE_ENDPOINT = "api/setstate"
 
-_GETHOMECOACHDATA_REQ = _BASE_URL + "api/gethomecoachsdata"
+_GETHOMECOACHDATA_ENDPOINT = "api/gethomecoachsdata"
 
-_GETMEASURE_REQ = _BASE_URL + "api/getmeasure"
-_GETSTATIONDATA_REQ = _BASE_URL + "api/getstationsdata"
+_GETMEASURE_ENDPOINT = "api/getmeasure"
+_GETSTATIONDATA_ENDPOINT = "api/getstationsdata"
 
-_GETPUBLIC_DATA = _BASE_URL + "api/getpublicdata"
+_GETPUBLIC_DATA_ENDPOINT = "api/getpublicdata"
 
 AUTHORIZATION_HEADER = "Authorization"
 
