@@ -3,6 +3,7 @@
   "name": "Netatmo",
   "documentation": "https://www.home-assistant.io/integrations/netatmo",
   "requirements": [
+    "oauthlib"
   ],
   "after_dependencies": [
     "cloud",
