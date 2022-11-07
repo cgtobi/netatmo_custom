@@ -22,9 +22,9 @@ done
 path="custom_components/netatmo/pyatmo"
 rm ${path}/*.py
 
-GH_ACCOUNT="jabesq"
+GH_ACCOUNT="cgtobi"
 GH_REPO="pyatmo"
-GH_BRANCH="development"
+GH_BRANCH="fix_legrand_modules"
 gh_path="${GH_RAW_BASE}/${GH_ACCOUNT}/${GH_REPO}/${GH_BRANCH}/src/pyatmo"
 files="__init__.py __main__.py __version__.py account.py auth.py camera.py const.py event.py exceptions.py helpers.py home.py home_coach.py person.py public_data.py py.typed room.py schedule.py thermostat.py weather_station.py"
 
