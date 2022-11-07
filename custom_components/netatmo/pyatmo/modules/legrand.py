@@ -38,11 +38,19 @@ class NLPM(Switch):
     """Legrand mobile plug."""
 
 
+class NLPO(Switch):
+    """Legrand contactor."""
+
+
+class NLPT(Switch):
+    """Legrand latching relay/teleruptor."""
+
+
 class NLPBS(Switch):
     """Legrand british standard plug."""
 
 
-class NLF(Switch):
+class NLF(Dimmer):
     """Legrand 2 wire light switch."""
 
 
@@ -50,8 +58,20 @@ class NLFN(Dimmer):
     """Legrand light switch with neutral."""
 
 
+class NLFE(Dimmer):
+    """Legrand On-Off dimmer switch."""
+
+
 class NLM(Switch):
     """Legrand light micro module."""
+
+
+class NLIS(Switch):
+    """Legrand double switch."""
+
+
+class NLD(Dimmer):
+    """Legrand Double On/Off dimmer remote"""
 
 
 class NLL(FirmwareMixin, EnergyMixin, WifiMixin, SwitchMixin, Module):
@@ -84,3 +104,15 @@ class NLPS(FirmwareMixin, PowerMixin, EnergyMixin, Module):
 
 class NLC(FirmwareMixin, SwitchMixin, Module):
     """Legrand / BTicino cable outlet."""
+
+
+class NLUI(FirmwareMixin, Module):
+    """Legrand NLUI device stub."""
+
+
+class NLUF(FirmwareMixin, Module):
+    """Legrand NLUF device stub."""
+
+
+class NLunknown(Module):
+    """NLunknown device stub."""

@@ -1,7 +1,11 @@
 """Support for Netatmo air care devices."""
+from warnings import warn
+
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
-from .const import _GETHOMECOACHDATA_ENDPOINT
+from .const import GETHOMECOACHDATA_ENDPOINT
 from .weather_station import AsyncWeatherStationData, WeatherStationData
+
+warn(f"The module {__name__} is deprecated.", DeprecationWarning, stacklevel=2)
 
 
 class HomeCoachData(WeatherStationData):
@@ -13,9 +17,9 @@ class HomeCoachData(WeatherStationData):
         """Initialize self.
 
         Arguments:
-            auth {NetatmoOAuth2} -- Authentication information with a valid access token
+            auth {NetatmoOAuth2} -- Authentication information with valid access token
         """
-        super().__init__(auth, endpoint=_GETHOMECOACHDATA_ENDPOINT, favorites=False)
+        super().__init__(auth, endpoint=GETHOMECOACHDATA_ENDPOINT, favorites=False)
 
 
 class AsyncHomeCoachData(AsyncWeatherStationData):
@@ -27,6 +31,6 @@ class AsyncHomeCoachData(AsyncWeatherStationData):
         """Initialize self.
 
         Arguments:
-            auth {AbstractAsyncAuth} -- Authentication information with a valid access token
+            auth {AbstractAsyncAuth} -- Authentication information with valid access token
         """
-        super().__init__(auth, endpoint=_GETHOMECOACHDATA_ENDPOINT, favorites=False)
+        super().__init__(auth, endpoint=GETHOMECOACHDATA_ENDPOINT, favorites=False)

@@ -1,5 +1,5 @@
 """Expose submodules."""
-from . import modules
+from . import const, modules
 from .account import AsyncAccount
 from .auth import AbstractAsyncAuth, ClientAuth, NetatmoOAuth2
 from .camera import AsyncCameraData, CameraData
@@ -39,5 +39,6 @@ __all__ = [
     "NoSchedule",
     "PublicData",
     "WeatherStationData",
+    "const",
     "modules",
 ]

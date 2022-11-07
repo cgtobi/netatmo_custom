@@ -30,7 +30,6 @@ async def async_setup_entry(
     @callback
     def _create_entity(netatmo_home: NetatmoHome) -> None:
         entity = NetatmoScheduleSelect(netatmo_home)
-        _LOGGER.debug("Adding climate select %s", entity)
         async_add_entities([entity])
 
     entry.async_on_unload(
@@ -80,7 +79,7 @@ class NetatmoScheduleSelect(NetatmoBase, SelectEntity):
         """Entity created."""
         await super().async_added_to_hass()
 
-        self.data_handler.config_entry.async_on_unload(
+        self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 f"signal-{DOMAIN}-webhook-{EVENT_TYPE_SCHEDULE}",

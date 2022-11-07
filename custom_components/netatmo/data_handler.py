@@ -113,7 +113,7 @@ class NetatmoPublisher:
     name: str
     interval: int
     next_scan: float
-    subscriptions: list[CALLBACK_TYPE | None]
+    subscriptions: set[CALLBACK_TYPE | None]
     method: str
     kwargs: dict
 
@@ -128,7 +128,7 @@ class NetatmoDataHandler:
         self.hass = hass
         self.config_entry = config_entry
         self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
-        self.publisher: dict = {}
+        self.publisher: dict[str, NetatmoPublisher] = {}
         self._queue: deque = deque()
         self._webhook: bool = False
 
@@ -150,15 +150,9 @@ class NetatmoDataHandler:
 
         await self.subscribe(ACCOUNT, ACCOUNT, None)
 
-        await asyncio.gather(
-            *(
-                self.hass.config_entries.async_forward_entry_setup(
-                    self.config_entry, platform
-                )
-                for platform in PLATFORMS
-            )
+        await self.hass.config_entries.async_forward_entry_setups(
+            self.config_entry, PLATFORMS
         )
-
         await self.async_dispatch()
 
     async def async_update(self, event_time: datetime) -> None:
@@ -172,18 +166,18 @@ class NetatmoDataHandler:
             if data_class.next_scan > time():
                 continue
 
-            if data_class_name := data_class.name:
-                self.publisher[data_class_name].next_scan = time() + data_class.interval
+            if publisher := data_class.name:
+                self.publisher[publisher].next_scan = time() + data_class.interval
 
-                await self.async_fetch_data(data_class_name)
+                await self.async_fetch_data(publisher)
 
         self._queue.rotate(BATCH_SIZE)
 
     @callback
-    def async_force_update(self, data_class_entry: str) -> None:
+    def async_force_update(self, signal_name: str) -> None:
         """Prioritize data retrieval for given data class entry."""
-        self.publisher[data_class_entry].next_scan = time()
-        self._queue.rotate(-(self._queue.index(self.publisher[data_class_entry])))
+        self.publisher[signal_name].next_scan = time()
+        self._queue.rotate(-(self._queue.index(self.publisher[signal_name])))
 
     async def handle_event(self, event: dict) -> None:
         """Handle webhook events."""
@@ -230,7 +224,7 @@ class NetatmoDataHandler:
         """Subscribe to publisher."""
         if signal_name in self.publisher:
             if update_callback not in self.publisher[signal_name].subscriptions:
-                self.publisher[signal_name].subscriptions.append(update_callback)
+                self.publisher[signal_name].subscriptions.add(update_callback)
             return
 
         if publisher == "public":
@@ -240,7 +234,7 @@ class NetatmoDataHandler:
             name=signal_name,
             interval=DEFAULT_INTERVALS[publisher],
             next_scan=time() + DEFAULT_INTERVALS[publisher],
-            subscriptions=[update_callback],
+            subscriptions={update_callback},
             method=PUBLISHERS[publisher],
             kwargs=kwargs,
         )
@@ -258,7 +252,7 @@ class NetatmoDataHandler:
         self, signal_name: str, update_callback: CALLBACK_TYPE | None
     ) -> None:
         """Unsubscribe from publisher."""
-        if update_callback in self.publisher[signal_name].subscriptions:
+        if update_callback not in self.publisher[signal_name].subscriptions:
             return
 
         self.publisher[signal_name].subscriptions.remove(update_callback)
@@ -294,20 +288,8 @@ class NetatmoDataHandler:
                 person.entity_id: person.pseudo for person in home.persons.values()
             }
 
-    def setup_favorites(self) -> None:
-        """Set up favorites weather modules."""
-        for module in self.account.modules.values():
-            if module.device_category is NetatmoDeviceCategory.weather:
-                async_dispatcher_send(
-                    self.hass,
-                    NETATMO_CREATE_WEATHER_SENSOR,
-                    NetatmoDevice(
-                        self,
-                        module,
-                        WEATHER,
-                        WEATHER,
-                    ),
-                )
+        await self.unsubscribe(WEATHER, None)
+        await self.unsubscribe(AIR_CARE, None)
 
     def setup_air_care(self) -> None:
         """Set up home coach/air care modules."""
@@ -334,6 +316,7 @@ class NetatmoDataHandler:
             NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT],
             NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
             NetatmoDeviceCategory.switch: [
+                NETATMO_CREATE_LIGHT,
                 NETATMO_CREATE_SWITCH,
                 NETATMO_CREATE_SENSOR,
             ],

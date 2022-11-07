@@ -5,10 +5,10 @@ import dataclasses
 from abc import ABC
 from collections import defaultdict
 from typing import Any
+from warnings import warn
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
-    _GETPUBLIC_DATA_ENDPOINT,
     ACCESSORY_GUST_ANGLE_TYPE,
     ACCESSORY_GUST_STRENGTH_TYPE,
     ACCESSORY_RAIN_24H_TYPE,
@@ -18,12 +18,15 @@ from .const import (
     ACCESSORY_WIND_ANGLE_TYPE,
     ACCESSORY_WIND_STRENGTH_TYPE,
     ACCESSORY_WIND_TIME_TYPE,
+    GETPUBLIC_DATA_ENDPOINT,
     STATION_HUMIDITY_TYPE,
     STATION_PRESSURE_TYPE,
     STATION_TEMPERATURE_TYPE,
 )
 from .exceptions import NoDevice
 from .modules import Location
+
+warn(f"The module {__name__} is deprecated.", DeprecationWarning, stacklevel=2)
 
 
 class AbstractPublicData(ABC):
@@ -149,10 +152,10 @@ class PublicData(AbstractPublicData):
 
         Arguments:
             auth {NetatmoOAuth2} -- Authentication information with a valid access token
-            LAT_NE {str} -- Latitude of the north east corner of the requested area. (-85 <= LAT_NE <= 85 and LAT_NE > LAT_SW)
-            LON_NE {str} -- Longitude of the north east corner of the requested area. (-180 <= LON_NE <= 180 and LON_NE > LON_SW)
-            LAT_SW {str} -- latitude of the south west corner of the requested area. (-85 <= LAT_SW <= 85)
-            LON_SW {str} -- Longitude of the south west corner of the requested area. (-180 <= LON_SW <= 180)
+            LAT_NE {str} -- Latitude of the north-east corner of the requested area. (-85 <= LAT_NE <= 85 and LAT_NE > LAT_SW)
+            LON_NE {str} -- Longitude of the north-east corner of the requested area. (-180 <= LON_NE <= 180 and LON_NE > LON_SW)
+            LAT_SW {str} -- latitude of the south-west corner of the requested area. (-85 <= LAT_SW <= 85)
+            LON_SW {str} -- Longitude of the south-west corner of the requested area. (-180 <= LON_SW <= 180)
 
         Keyword Arguments:
             required_data_type {str} -- comma-separated list from above _STATION or _ACCESSORY values (default: {None})
@@ -173,7 +176,7 @@ class PublicData(AbstractPublicData):
             post_params["required_data"] = self.required_data_type
 
         resp = self.auth.post_api_request(
-            endpoint=_GETPUBLIC_DATA_ENDPOINT,
+            endpoint=GETPUBLIC_DATA_ENDPOINT,
             params=post_params,
         ).json()
         try:
@@ -201,10 +204,10 @@ class AsyncPublicData(AbstractPublicData):
 
         Arguments:
             auth {AbstractAsyncAuth} -- Authentication information with a valid access token
-            LAT_NE {str} -- Latitude of the north east corner of the requested area. (-85 <= LAT_NE <= 85 and LAT_NE > LAT_SW)
-            LON_NE {str} -- Longitude of the north east corner of the requested area. (-180 <= LON_NE <= 180 and LON_NE > LON_SW)
-            LAT_SW {str} -- latitude of the south west corner of the requested area. (-85 <= LAT_SW <= 85)
-            LON_SW {str} -- Longitude of the south west corner of the requested area. (-180 <= LON_SW <= 180)
+            LAT_NE {str} -- Latitude of the north-east corner of the requested area. (-85 <= LAT_NE <= 85 and LAT_NE > LAT_SW)
+            LON_NE {str} -- Longitude of the north-east corner of the requested area. (-180 <= LON_NE <= 180 and LON_NE > LON_SW)
+            LAT_SW {str} -- latitude of the south-west corner of the requested area. (-85 <= LAT_SW <= 85)
+            LON_SW {str} -- Longitude of the south-west corner of the requested area. (-180 <= LON_SW <= 180)
 
         Keyword Arguments:
             required_data_type {str} -- comma-separated list from above _STATION or _ACCESSORY values (default: {None})
@@ -225,7 +228,7 @@ class AsyncPublicData(AbstractPublicData):
             post_params["required_data"] = self.required_data_type
 
         resp = await self.auth.async_post_api_request(
-            endpoint=_GETPUBLIC_DATA_ENDPOINT,
+            endpoint=GETPUBLIC_DATA_ENDPOINT,
             params=post_params,
         )
         assert not isinstance(resp, bytes)

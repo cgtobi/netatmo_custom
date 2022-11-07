@@ -8,12 +8,9 @@ from .pyatmo import modules as NaModules
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
-    SUPPORT_CLOSE,
-    SUPPORT_OPEN,
-    SUPPORT_SET_POSITION,
-    SUPPORT_STOP,
     CoverDeviceClass,
     CoverEntity,
+    CoverEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -48,11 +45,16 @@ async def async_setup_entry(
 class NetatmoCover(NetatmoBase, CoverEntity):
     """Representation of a Netatmo cover device."""
 
+    _attr_supported_features = (
+        CoverEntityFeature.OPEN
+        | CoverEntityFeature.CLOSE
+        | CoverEntityFeature.STOP
+        | CoverEntityFeature.SET_POSITION
+    )
+
     def __init__(self, netatmo_device: NetatmoDevice) -> None:
         """Initialize the Netatmo device."""
-        CoverEntity.__init__(self)
         super().__init__(netatmo_device.data_handler)
-        self.optimistic = True
 
         self._cover = cast(NaModules.Shutter, netatmo_device.device)
 
@@ -62,8 +64,7 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         self._config_url = CONF_URL_CONTROL
 
         self._home_id = self._cover.home.entity_id
-        self._closed: bool | None = None
-        self._attr_is_closed = None
+        self._attr_is_closed = self._cover.current_position == 0
 
         self._signal_name = f"{HOME}-{self._home_id}"
         self._publishers.extend(
@@ -77,55 +78,21 @@ class NetatmoCover(NetatmoBase, CoverEntity):
         )
         self._attr_unique_id = f"{self._id}-{self._model}"
 
-    @property
-    def supported_features(self) -> int:
-        """Flag supported features."""
-        supported_features = 0
-        supported_features |= SUPPORT_OPEN
-        supported_features |= SUPPORT_CLOSE
-        supported_features |= SUPPORT_STOP
-        supported_features |= SUPPORT_SET_POSITION
-
-        return supported_features
-
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
-        self._attr_is_closing = True
+        await self._cover.async_close()
+        self._attr_is_closed = True
         self.async_write_ha_state()
-        try:
-            await self._cover.async_close()
-            if self.optimistic:
-                self._attr_is_closed = True
-        finally:
-            self._attr_is_closing = None
-            self.async_write_ha_state()
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
-        self._attr_is_opening = True
+        await self._cover.async_open()
+        self._attr_is_closed = False
         self.async_write_ha_state()
-        try:
-            await self._cover.async_open()
-            if self.optimistic:
-                self._attr_is_closed = False
-        finally:
-            self._attr_is_opening = None
-            self.async_write_ha_state()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         await self._cover.async_stop()
-
-        if self.optimistic:
-            if self._attr_is_closing:
-                self._attr_is_closed = True
-            elif self._attr_is_opening:
-                self._attr_is_closed = False
-
-            self._attr_is_closing = None
-            self._attr_is_opening = None
-
-        self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover shutter to a specific position."""
@@ -135,10 +102,6 @@ class NetatmoCover(NetatmoBase, CoverEntity):
     def device_class(self) -> str:
         """Return the device class."""
         return CoverDeviceClass.SHUTTER
-
-    async def async_added_to_hass(self) -> None:
-        """Complete the initialization."""
-        await super().async_added_to_hass()
 
     @callback
     def async_update_callback(self) -> None:

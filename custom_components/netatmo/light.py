@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from .pyatmo import modules as NaModules
 
-from homeassistant.components.light import LightEntity
+from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -35,12 +35,10 @@ async def async_setup_entry(
 
     @callback
     def _create_camera_light_entity(netatmo_device: NetatmoDevice) -> None:
-        try:
-            getattr(netatmo_device.device, "floodlight")
-        except AttributeError:
+        if not hasattr(netatmo_device.device, "floodlight"):
             return
+
         entity = NetatmoCameraLight(netatmo_device)
-        _LOGGER.debug("Adding climate battery sensor %s", entity)
         async_add_entities([entity])
 
     entry.async_on_unload(
@@ -51,12 +49,11 @@ async def async_setup_entry(
 
     @callback
     def _create_entity(netatmo_device: NetatmoDevice) -> None:
-        try:
-            getattr(netatmo_device.device, "floodlight")
-        except AttributeError:
+        if not hasattr(netatmo_device.device, "brightness"):
             return
-        entity = NetatmoCameraLight(netatmo_device)
-        _LOGGER.debug("Adding climate battery sensor %s", entity)
+
+        entity = NetatmoLight(netatmo_device)
+        _LOGGER.debug("Adding light %s", entity)
         async_add_entities([entity])
 
     entry.async_on_unload(
@@ -66,6 +63,8 @@ async def async_setup_entry(
 
 class NetatmoCameraLight(NetatmoBase, LightEntity):
     """Representation of a Netatmo Presence camera light."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -79,7 +78,6 @@ class NetatmoCameraLight(NetatmoBase, LightEntity):
         self._id = self._camera.entity_id
         self._home_id = self._camera.home.entity_id
         self._device_name = self._camera.name
-        self._attr_name = f"{self._device_name}"
         self._model = self._camera.device_type
         self._config_url = CONF_URL_SECURITY
         self._is_on = False
@@ -100,7 +98,7 @@ class NetatmoCameraLight(NetatmoBase, LightEntity):
         """Entity created."""
         await super().async_added_to_hass()
 
-        self.data_handler.config_entry.async_on_unload(
+        self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
                 f"signal-{DOMAIN}-webhook-{EVENT_TYPE_LIGHT_MODE}",
@@ -160,7 +158,6 @@ class NetatmoLight(NetatmoBase, LightEntity):
         netatmo_device: NetatmoDevice,
     ) -> None:
         """Initialize a Netatmo light."""
-        LightEntity.__init__(self)
         super().__init__(netatmo_device.data_handler)
 
         self._dimmer = cast(NaModules.NLFN, netatmo_device.device)
@@ -172,6 +169,11 @@ class NetatmoLight(NetatmoBase, LightEntity):
         self._config_url = CONF_URL_CONTROL
         self._attr_brightness = 0
         self._attr_unique_id = f"{self._id}-light"
+
+        self._attr_supported_color_modes: set[str] = set()
+
+        if not self._attr_supported_color_modes and self._dimmer.brightness is not None:
+            self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
 
         self._signal_name = f"{HOME}-{self._home_id}"
         self._publishers.extend(
@@ -185,29 +187,32 @@ class NetatmoLight(NetatmoBase, LightEntity):
         )
 
     @property
-    def brightness(self) -> int | None:
-        """Return the brightness of this light between 0..255."""
-        if self._dimmer.brightness is not None:
-            # Netatmo uses a range of [0, 100] to control brightness.
-            return round((self._dimmer.brightness / 100) * 255)
-        return None
-
-    @property
     def is_on(self) -> bool:
         """Return true if light is on."""
-        return self._attr_brightness is not None and self._attr_brightness > 0
+        return self._dimmer.on is True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn light on."""
-        _LOGGER.debug("Turn camera '%s' on", self.name)
-        await self._dimmer.async_on()
+        if ATTR_BRIGHTNESS in kwargs:
+            await self._dimmer.async_set_brightness(kwargs[ATTR_BRIGHTNESS])
+
+        else:
+            await self._dimmer.async_on()
+
+        self._attr_is_on = True
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn camera floodlight into auto mode."""
-        _LOGGER.debug("Turn camera '%s' to auto mode", self.name)
+        """Turn light off."""
         await self._dimmer.async_off()
+        self._attr_is_on = False
+        self.async_write_ha_state()
 
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        self._attr_brightness = self._dimmer.brightness
+        if self._dimmer.brightness is not None:
+            # Netatmo uses a range of [0, 100] to control brightness
+            self._attr_brightness = round((self._dimmer.brightness / 100) * 255)
+        else:
+            self._attr_brightness = None

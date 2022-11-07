@@ -5,19 +5,22 @@ import logging
 from abc import ABC
 from collections import defaultdict
 from typing import Any
+from warnings import warn
 
 from .auth import AbstractAsyncAuth, NetatmoOAuth2
 from .const import (
-    _GETHOMESDATA_ENDPOINT,
-    _GETHOMESTATUS_ENDPOINT,
-    _SETROOMTHERMPOINT_ENDPOINT,
-    _SETTHERMMODE_ENDPOINT,
-    _SWITCHHOMESCHEDULE_ENDPOINT,
+    GETHOMESDATA_ENDPOINT,
+    GETHOMESTATUS_ENDPOINT,
+    SETROOMTHERMPOINT_ENDPOINT,
+    SETTHERMMODE_ENDPOINT,
+    SWITCHHOMESCHEDULE_ENDPOINT,
 )
 from .exceptions import InvalidRoom, NoSchedule
 from .helpers import extract_raw_data
 
 LOG = logging.getLogger(__name__)
+
+warn(f"The module {__name__} is deprecated.", DeprecationWarning, stacklevel=2)
 
 
 class AbstractHomeData(ABC):
@@ -110,13 +113,13 @@ class HomeData(AbstractHomeData):
         """Initialize the Netatmo home data.
 
         Arguments:
-            auth {NetatmoOAuth2} -- Authentication information with a valid access token
+            auth {NetatmoOAuth2} -- Authentication information with valid access token
         """
         self.auth = auth
 
     def update(self) -> None:
         """Fetch and process data from API."""
-        resp = self.auth.post_api_request(endpoint=_GETHOMESDATA_ENDPOINT)
+        resp = self.auth.post_api_request(endpoint=GETHOMESDATA_ENDPOINT)
 
         self.raw_data = extract_raw_data(resp.json(), "homes")
         self.process()
@@ -128,7 +131,7 @@ class HomeData(AbstractHomeData):
 
         post_params = {"home_id": home_id, "schedule_id": schedule_id}
         resp = self.auth.post_api_request(
-            endpoint=_SWITCHHOMESCHEDULE_ENDPOINT,
+            endpoint=SWITCHHOMESCHEDULE_ENDPOINT,
             params=post_params,
         )
         LOG.debug("Response: %s", resp)
@@ -141,13 +144,13 @@ class AsyncHomeData(AbstractHomeData):
         """Initialize the Netatmo home data.
 
         Arguments:
-            auth {AbstractAsyncAuth} -- Authentication information with a valid access token
+            auth {AbstractAsyncAuth} -- Authentication information with valid access token
         """
         self.auth = auth
 
     async def async_update(self):
         """Fetch and process data from API."""
-        resp = await self.auth.async_post_api_request(endpoint=_GETHOMESDATA_ENDPOINT)
+        resp = await self.auth.async_post_api_request(endpoint=GETHOMESDATA_ENDPOINT)
 
         assert not isinstance(resp, bytes)
         self.raw_data = extract_raw_data(await resp.json(), "homes")
@@ -159,7 +162,7 @@ class AsyncHomeData(AbstractHomeData):
             raise NoSchedule(f"{schedule_id} is not a valid schedule id")
 
         resp = await self.auth.async_post_api_request(
-            endpoint=_SWITCHHOMESCHEDULE_ENDPOINT,
+            endpoint=SWITCHHOMESCHEDULE_ENDPOINT,
             params={"home_id": home_id, "schedule_id": schedule_id},
         )
         LOG.debug("Response: %s", resp)
@@ -254,7 +257,7 @@ class HomeStatus(AbstractHomeStatus):
     def update(self) -> None:
         """Fetch and process data from API."""
         resp = self.auth.post_api_request(
-            endpoint=_GETHOMESTATUS_ENDPOINT,
+            endpoint=GETHOMESTATUS_ENDPOINT,
             params={"home_id": self.home_id},
         )
 
@@ -264,8 +267,8 @@ class HomeStatus(AbstractHomeStatus):
     def set_thermmode(
         self,
         mode: str,
-        end_time: int = None,
-        schedule_id: str = None,
+        end_time: int | None = None,
+        schedule_id: str | None = None,
     ) -> str | None:
         """Set thermotat mode."""
         post_params = {"home_id": self.home_id, "mode": mode}
@@ -276,7 +279,7 @@ class HomeStatus(AbstractHomeStatus):
             post_params["schedule_id"] = schedule_id
 
         return self.auth.post_api_request(
-            endpoint=_SETTHERMMODE_ENDPOINT,
+            endpoint=SETTHERMMODE_ENDPOINT,
             params=post_params,
         ).json()
 
@@ -284,12 +287,12 @@ class HomeStatus(AbstractHomeStatus):
         self,
         room_id: str,
         mode: str,
-        temp: float = None,
-        end_time: int = None,
+        temp: float | None = None,
+        end_time: int | None = None,
     ) -> str | None:
         """Set room themperature set point."""
         post_params = {"home_id": self.home_id, "room_id": room_id, "mode": mode}
-        # Temp and endtime should only be send when mode=='manual', but netatmo api can
+        # Temp and endtime should only be sent when mode=='manual', but netatmo api can
         # handle that even when mode == 'home' and these settings don't make sense
         if temp is not None:
             post_params["temp"] = str(temp)
@@ -298,7 +301,7 @@ class HomeStatus(AbstractHomeStatus):
             post_params["endtime"] = str(end_time)
 
         return self.auth.post_api_request(
-            endpoint=_SETROOMTHERMPOINT_ENDPOINT,
+            endpoint=SETROOMTHERMPOINT_ENDPOINT,
             params=post_params,
         ).json()
 
@@ -319,7 +322,7 @@ class AsyncHomeStatus(AbstractHomeStatus):
     async def async_update(self) -> None:
         """Fetch and process data from API."""
         resp = await self.auth.async_post_api_request(
-            endpoint=_GETHOMESTATUS_ENDPOINT,
+            endpoint=GETHOMESTATUS_ENDPOINT,
             params={"home_id": self.home_id},
         )
 
@@ -330,8 +333,8 @@ class AsyncHomeStatus(AbstractHomeStatus):
     async def async_set_thermmode(
         self,
         mode: str,
-        end_time: int = None,
-        schedule_id: str = None,
+        end_time: int | None = None,
+        schedule_id: str | None = None,
     ) -> str | None:
         """Set thermotat mode."""
         post_params = {"home_id": self.home_id, "mode": mode}
@@ -342,7 +345,7 @@ class AsyncHomeStatus(AbstractHomeStatus):
             post_params["schedule_id"] = schedule_id
 
         resp = await self.auth.async_post_api_request(
-            endpoint=_SETTHERMMODE_ENDPOINT,
+            endpoint=SETTHERMMODE_ENDPOINT,
             params=post_params,
         )
         assert not isinstance(resp, bytes)
@@ -352,12 +355,12 @@ class AsyncHomeStatus(AbstractHomeStatus):
         self,
         room_id: str,
         mode: str,
-        temp: float = None,
-        end_time: int = None,
+        temp: float | None = None,
+        end_time: int | None = None,
     ) -> str | None:
         """Set room themperature set point."""
         post_params = {"home_id": self.home_id, "room_id": room_id, "mode": mode}
-        # Temp and endtime should only be send when mode=='manual', but netatmo api can
+        # Temp and endtime should only be sent when mode=='manual', but netatmo api can
         # handle that even when mode == 'home' and these settings don't make sense
         if temp is not None:
             post_params["temp"] = str(temp)
@@ -366,7 +369,7 @@ class AsyncHomeStatus(AbstractHomeStatus):
             post_params["endtime"] = str(end_time)
 
         resp = await self.auth.async_post_api_request(
-            endpoint=_SETROOMTHERMPOINT_ENDPOINT,
+            endpoint=SETROOMTHERMPOINT_ENDPOINT,
             params=post_params,
         )
         assert not isinstance(resp, bytes)

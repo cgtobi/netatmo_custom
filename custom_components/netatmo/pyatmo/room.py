@@ -3,15 +3,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from .const import (
-    _DEFAULT_BASE_URL,
-    _SETROOMTHERMPOINT_ENDPOINT,
-    FROSTGUARD,
-    HOME,
-    MANUAL,
-)
+from .const import FROSTGUARD, HOME, MANUAL, SETROOMTHERMPOINT_ENDPOINT, RawData
 from .modules.base_class import NetatmoBase
 from .modules.device_types import DeviceType
 
@@ -44,7 +38,7 @@ class Room(NetatmoBase):
     def __init__(
         self,
         home: Home,
-        room: dict,
+        room: dict[str, Any],
         all_modules: dict[str, Module],
     ) -> None:
         super().__init__(room)
@@ -58,7 +52,7 @@ class Room(NetatmoBase):
         self.features = set()
         self.evaluate_device_type()
 
-    def update_topology(self, raw_data: dict) -> None:
+    def update_topology(self, raw_data: RawData) -> None:
         self.name = raw_data["name"]
         self.modules = {
             m_id: m
@@ -83,7 +77,7 @@ class Room(NetatmoBase):
             self.climate_type = DeviceType.BNS
             self.features.add("humidity")
 
-    def update(self, raw_data: dict) -> None:
+    def update(self, raw_data: RawData) -> None:
         self.heating_power_request = raw_data.get("heating_power_request")
         self.humidity = raw_data.get("humidity")
         self.reachable = raw_data.get("reachable")
@@ -93,27 +87,27 @@ class Room(NetatmoBase):
 
     async def async_therm_manual(
         self,
-        temp: float = None,
-        end_time: int = None,
+        temp: float | None = None,
+        end_time: int | None = None,
     ) -> None:
         await self.async_therm_set(MANUAL, temp, end_time)
 
-    async def async_therm_home(self, end_time: int = None) -> None:
+    async def async_therm_home(self, end_time: int | None = None) -> None:
         await self.async_therm_set(HOME, end_time=end_time)
 
-    async def async_therm_frostguard(self, end_time: int = None) -> None:
+    async def async_therm_frostguard(self, end_time: int | None = None) -> None:
         await self.async_therm_set(FROSTGUARD, end_time=end_time)
 
     async def async_therm_set(
         self,
         mode: str,
-        temp: float = None,
-        end_time: int = None,
+        temp: float | None = None,
+        end_time: int | None = None,
     ) -> None:
         """Set room temperature set point."""
         mode = MODE_MAP.get(mode, mode)
 
-        if "NATherm1" in self.device_types:
+        if "NATherm1" in self.device_types or "NRV" in self.device_types:
             await self._async_set_thermpoint(mode, temp, end_time)
 
         else:
@@ -122,10 +116,10 @@ class Room(NetatmoBase):
     async def _async_therm_set(
         self,
         mode: str,
-        temp: float = None,
-        end_time: int = None,
+        temp: float | None = None,
+        end_time: int | None = None,
     ) -> bool:
-        json_therm_set: dict[str, list[dict[str, str | int | float]]] = {
+        json_therm_set: dict[str, Any] = {
             "rooms": [
                 {
                     "id": self.entity_id,
@@ -145,8 +139,8 @@ class Room(NetatmoBase):
     async def _async_set_thermpoint(
         self,
         mode: str,
-        temp: float = None,
-        end_time: int = None,
+        temp: float | None = None,
+        end_time: int | None = None,
     ) -> None:
         """Set room temperature set point (NRV, NATherm1)."""
         post_params = {
@@ -154,7 +148,7 @@ class Room(NetatmoBase):
             "room_id": self.entity_id,
             "mode": mode,
         }
-        # Temp and endtime should only be send when mode=='manual', but netatmo api can
+        # Temp and endtime should only be sent when mode=='manual', but netatmo api can
         # handle that even when mode == 'home' and these settings don't make sense
         if temp is not None:
             post_params["temp"] = str(temp)
@@ -168,7 +162,7 @@ class Room(NetatmoBase):
             temp,
             end_time,
         )
-        await self.home.auth.async_post_request(
-            url=_DEFAULT_BASE_URL + _SETROOMTHERMPOINT_ENDPOINT,
+        await self.home.auth.async_post_api_request(
+            endpoint=SETROOMTHERMPOINT_ENDPOINT,
             params=post_params,
         )

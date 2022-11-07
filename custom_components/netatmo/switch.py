@@ -45,7 +45,6 @@ class NetatmoSwitch(NetatmoBase, SwitchEntity):
         netatmo_device: NetatmoDevice,
     ) -> None:
         """Initialize the Netatmo device."""
-        SwitchEntity.__init__(self)
         super().__init__(netatmo_device.data_handler)
 
         self._switch = cast(NaModules.Switch, netatmo_device.device)
@@ -70,10 +69,6 @@ class NetatmoSwitch(NetatmoBase, SwitchEntity):
         self._attr_unique_id = f"{self._id}-{self._model}"
         self._attr_is_on = self._switch.on
 
-    async def async_added_to_hass(self) -> None:
-        """Entity created."""
-        await super().async_added_to_hass()
-
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
@@ -82,7 +77,11 @@ class NetatmoSwitch(NetatmoBase, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the zone on."""
         await self._switch.async_on()
+        self._attr_is_on = True
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the zone off."""
         await self._switch.async_off()
+        self._attr_is_on = False
+        self.async_write_ha_state()

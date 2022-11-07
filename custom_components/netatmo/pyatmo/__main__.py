@@ -1,8 +1,10 @@
 import os
 import sys
+from warnings import warn
 
-from .auth import ALL_SCOPES, ClientAuth
+from .auth import ClientAuth
 from .camera import CameraData
+from .const import ALL_SCOPES
 from .exceptions import NoDevice
 from .home_coach import HomeCoachData
 from .public_data import PublicData
@@ -14,14 +16,16 @@ LAT_NE = "46.610870"
 LON_SW = "6.217828"
 LAT_SW = "46.596485"
 
+warn(f"The module {__name__} is deprecated.", DeprecationWarning, stacklevel=2)
+
 
 def tty_print(message: str) -> None:
-    """Print to stdout if in a interactive terminal."""
+    """Print to stdout if in an interactive terminal."""
     if sys.stdout.isatty():
         print(message)
 
 
-def main():
+def main() -> None:
     """Run basic health checks."""
     client_id = os.getenv("CLIENT_ID", "")
     client_secret = os.getenv("CLIENT_SECRET", "")

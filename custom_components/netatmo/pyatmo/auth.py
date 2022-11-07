@@ -9,16 +9,16 @@ from time import sleep
 from typing import Any, Callable
 
 import requests
-from aiohttp import ClientError, ClientResponse, ClientSession
+from aiohttp import ClientError, ClientResponse, ClientSession, ContentTypeError
 from oauthlib.oauth2 import LegacyApplicationClient, TokenExpiredError
 from requests_oauthlib import OAuth2Session
 
 from .const import (
-    _DEFAULT_BASE_URL,
     ALL_SCOPES,
     AUTH_REQ_ENDPOINT,
     AUTH_URL_ENDPOINT,
     AUTHORIZATION_HEADER,
+    DEFAULT_BASE_URL,
     ERRORS,
     WEBHOOK_URL_ADD_ENDPOINT,
     WEBHOOK_URL_DROP_ENDPOINT,
@@ -35,14 +35,14 @@ class NetatmoOAuth2:
 
     def __init__(
         self,
-        client_id: str = None,
-        client_secret: str = None,
+        client_id: str,
+        client_secret: str,
         redirect_uri: str | None = None,
         token: dict[str, str] | None = None,
         token_updater: Callable[[str], None] | None = None,
         scope: str | None = "read_station",
         user_prefix: str | None = None,
-        base_url: str = _DEFAULT_BASE_URL,
+        base_url: str = DEFAULT_BASE_URL,
     ) -> None:
         """Initialize self.
 
@@ -90,7 +90,7 @@ class NetatmoOAuth2:
             scope=self.scope,
         )
 
-    def refresh_tokens(self) -> dict[str, str | int]:
+    def refresh_tokens(self) -> Any:
         """Refresh and return new tokens."""
         token = self._oauth.refresh_token(
             self.base_url + AUTH_REQ_ENDPOINT,
@@ -105,7 +105,7 @@ class NetatmoOAuth2:
     def post_api_request(
         self,
         endpoint: str,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         timeout: int = 5,
     ) -> requests.Response:
         return self.post_request(
@@ -117,11 +117,11 @@ class NetatmoOAuth2:
     def post_request(
         self,
         url: str,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         timeout: int = 5,
     ) -> requests.Response:
         """Wrapper for post requests."""
-        resp = None
+        resp = requests.Response()
         req_args = {"data": params if params is not None else {}}
 
         if "json" in req_args["data"]:
@@ -140,7 +140,12 @@ class NetatmoOAuth2:
 
         else:
 
-            def query(url: str, params: dict, timeout: int, retries: int) -> Any:
+            def query(
+                url: str,
+                params: dict[str, Any],
+                timeout: int,
+                retries: int,
+            ) -> Any:
                 if retries == 0:
                     LOG.error("Too many retries")
                     return requests.Response()
@@ -161,7 +166,7 @@ class NetatmoOAuth2:
 
             resp = query(url, req_args, timeout, 3)
 
-        if resp is None:
+        if resp.status_code is None:
             LOG.debug("Resp is None - %s", resp)
             return requests.Response()
 
@@ -195,20 +200,19 @@ class NetatmoOAuth2:
 
         return requests.Response()
 
-    def get_authorization_url(self, state: str | None = None) -> tuple:
+    def get_authorization_url(self, state: str | None = None) -> Any:
         return self._oauth.authorization_url(self.base_url + AUTH_URL_ENDPOINT, state)
 
     def request_token(
         self,
         authorization_response: str | None = None,
         code: str | None = None,
-    ) -> dict[str, str]:
+    ) -> Any:
         """
         Generic method for fetching a Netatmo access token.
-        :param authorization_response: Authorization response URL, the callback
-                                       URL of the request back to you.
-        :param code: Authorization code
-        :return: A token dict
+        :param authorization_response: Authorization response URL, the callback URL of the request back to you.
+        :param code: Authorization code.
+        :return: A token dict.
         """
         return self._oauth.fetch_token(
             self.base_url + AUTH_REQ_ENDPOINT,
@@ -260,9 +264,9 @@ class ClientAuth(NetatmoOAuth2):
         client_secret: str,
         username: str,
         password: str,
-        scope="read_station",
-        user_prefix: str = None,
-        base_url: str = _DEFAULT_BASE_URL,
+        scope: str = "read_station",
+        user_prefix: str | None = None,
+        base_url: str = DEFAULT_BASE_URL,
     ):
         super().__init__(
             client_id=client_id,
@@ -292,7 +296,7 @@ class AbstractAsyncAuth(ABC):
     def __init__(
         self,
         websession: ClientSession,
-        base_url: str = _DEFAULT_BASE_URL,
+        base_url: str = DEFAULT_BASE_URL,
     ) -> None:
         """Initialize the auth."""
         self.websession = websession
@@ -306,7 +310,7 @@ class AbstractAsyncAuth(ABC):
         self,
         endpoint: str,
         base_url: str | None = None,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         timeout: int = 5,
     ) -> bytes:
         """Wrapper for async get requests."""
@@ -321,7 +325,7 @@ class AbstractAsyncAuth(ABC):
         url = (base_url or self.base_url) + endpoint
         async with self.websession.get(
             url,
-            **req_args,
+            **req_args,  # type: ignore
             headers=headers,
             timeout=timeout,
         ) as resp:
@@ -341,7 +345,7 @@ class AbstractAsyncAuth(ABC):
         self,
         endpoint: str,
         base_url: str | None = None,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         timeout: int = 5,
     ) -> ClientResponse:
         return await self.async_post_request(
@@ -353,7 +357,7 @@ class AbstractAsyncAuth(ABC):
     async def async_post_request(
         self,
         url: str,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
         timeout: int = 5,
     ) -> ClientResponse:
         """Wrapper for async post requests."""
@@ -390,7 +394,7 @@ class AbstractAsyncAuth(ABC):
                         f"when accessing '{url}'",
                     )
 
-                except JSONDecodeError as exc:
+                except (JSONDecodeError, ContentTypeError) as exc:
                     raise ApiError(
                         f"{resp_status} - "
                         f"{ERRORS.get(resp_status, '')} - "
