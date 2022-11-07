@@ -70,7 +70,7 @@ class DeviceType(str, Enum):
     NLUI = "NLUI"  # Legrand device stub
     NLunknown = "NLunknown"  # Legrand device stub
     NLUF = "NLUF"  # Legrand device stub
-    NLDD = "NLDD"  # Legrand device stub
+    NLDD = "NLDD"  # Legrand dimmer
     NLUP = "NLUP"  # Legrand device stub
 
     # BTicino Classe 300 EOS
@@ -84,6 +84,9 @@ class DeviceType(str, Enum):
     NBO = "NBO"  # orientable shutter
     NBR = "NBR"  # roller shutter
     NBS = "NBS"  # swing shutter
+
+    #
+    Z3L = "Z3L"  # Zigbee 3 Light
 
     # pylint: enable=C0103
 
@@ -138,6 +141,7 @@ DEVICE_CATEGORY_MAP: dict[DeviceType, DeviceCategory] = {
     DeviceType.BNS: DeviceCategory.climate,
     DeviceType.NLPC: DeviceCategory.meter,
     DeviceType.NLE: DeviceCategory.meter,
+    DeviceType.Z3L: DeviceCategory.dimmer,
 }
 
 
@@ -198,4 +202,6 @@ DEVICE_DESCRIPTION_MAP: dict[DeviceType, tuple[str, str]] = {
     DeviceType.NBR: ("Bubbendorf", "Roller Shutter"),
     DeviceType.NBO: ("Bubbendorf", "Orientable Shutter"),
     DeviceType.NBS: ("Bubbendorf", "Swing Shutter"),
+    # Zigbee 3
+    DeviceType.Z3L: ("Legrand", "Zigbee 3 Light"),
 }
