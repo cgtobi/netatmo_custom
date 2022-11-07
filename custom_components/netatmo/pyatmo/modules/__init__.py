@@ -5,6 +5,7 @@ from .idiamant import NBG, NBO, NBR, NBS
 from .legrand import (
     NLC,
     NLD,
+    NLDD,
     NLE,
     NLF,
     NLFE,
@@ -82,6 +83,7 @@ __all__ = [
     "NIS",
     "NLC",
     "NLD",
+    "NLDD",
     "NLE",
     "NLF",
     "NLFE",
