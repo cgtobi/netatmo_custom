@@ -5,9 +5,9 @@ path="custom_components/netatmo"
 rm ${path}/*.py
 
 ## Gather HA integration and modify
-GH_ACCOUNT="home-assistant"
-GH_REPO="core"
-GH_BRANCH="dev"
+GH_ACCOUNT="cgtobi"
+GH_REPO="home-assistant"
+GH_BRANCH="netatmo_debug_climate"
 gh_path="${GH_RAW_BASE}/${GH_ACCOUNT}/${GH_REPO}/${GH_BRANCH}/homeassistant/components/netatmo"
 files="__init__.py api.py application_credentials.py camera.py climate.py config_flow.py const.py cover.py data_handler.py device_trigger.py diagnostics.py helper.py light.py media_source.py netatmo_entity_base.py select.py sensor.py switch.py webhook.py"
 

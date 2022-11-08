@@ -111,6 +111,7 @@ async def async_setup_entry(
 
     @callback
     def _create_entity(netatmo_device: NetatmoRoom) -> None:
+        _LOGGER.debug("Creating climate entity: %s", netatmo_device)
         entity = NetatmoThermostat(netatmo_device)
         async_add_entities([entity])
 
