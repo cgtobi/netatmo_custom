@@ -4,11 +4,13 @@ from __future__ import annotations
 import logging
 
 from ..modules.module import (
+    ContactorMixin,
     Dimmer,
     EnergyMixin,
     FirmwareMixin,
     HistoryMixin,
     Module,
+    OffloadMixin,
     PowerMixin,
     RfMixin,
     ShutterMixin,
@@ -38,7 +40,7 @@ class NLPM(Switch):
     """Legrand mobile plug."""
 
 
-class NLPO(Switch, EnergyMixin):
+class NLPO(ContactorMixin, OffloadMixin, Switch):
     """Legrand contactor."""
 
 

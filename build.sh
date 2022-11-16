@@ -39,7 +39,7 @@ path="custom_components/netatmo/pyatmo/modules"
 rm ${path}/*.py
 
 gh_path="${GH_RAW_BASE}/${GH_ACCOUNT}/${GH_REPO}/${GH_BRANCH}/src/pyatmo/modules"
-files="__init__.py base_class.py bticino.py device_types.py idiamant.py legrand.py module.py netatmo.py smarther.py"
+files="__init__.py base_class.py bticino.py device_types.py idiamant.py legrand.py module.py netatmo.py smarther.py somfy.py"
 
 for file in ${files}; do
   wget ${gh_path}/${file} -O ${path}/${file}
