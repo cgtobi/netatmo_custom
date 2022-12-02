@@ -146,3 +146,7 @@ class Z3L(Dimmer):
 
 class EBU(Module):
     """EBU gas meter."""
+
+
+class NLAS(Module):
+    """NLAS wireless batteryless scene switch."""
