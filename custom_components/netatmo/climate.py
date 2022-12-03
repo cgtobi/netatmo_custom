@@ -353,7 +353,12 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        _LOGGER.debug("Updating room %s - %s", self._room.name, self._room)
+        _LOGGER.debug(
+            "Updating room %s - %s (%s)",
+            self._room.name,
+            self._room,
+            self._room.reachable,
+        )
         if not self._room.reachable:
             if self.available:
                 self._connected = False
