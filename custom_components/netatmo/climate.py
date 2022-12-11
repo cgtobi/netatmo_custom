@@ -359,7 +359,7 @@ class NetatmoThermostat(NetatmoBase, ClimateEntity):
             self._room,
             self._room.reachable,
         )
-        if self._room.reachable is not False:
+        if not self._room.reachable:
             if self.available:
                 self._connected = False
             return
