@@ -112,7 +112,7 @@ class NLDD(Dimmer):
     """Legrand NLDD dimmer."""
 
 
-class NLUP(FirmwareMixin, PowerMixin, Module):
+class NLUP(FirmwareMixin, PowerMixin, SwitchMixin, Module):
     """Legrand NLUP Power outlet."""
 
 
@@ -150,3 +150,7 @@ class EBU(Module):
 
 class NLAS(Module):
     """NLAS wireless batteryless scene switch."""
+
+
+class NLTS(Module):
+    """NLTS motion sensor."""
