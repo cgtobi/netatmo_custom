@@ -149,12 +149,12 @@ DEVICE_CATEGORY_MAP: dict[DeviceType, DeviceCategory] = {
     DeviceType.NLPC: DeviceCategory.meter,
     DeviceType.NLE: DeviceCategory.meter,
     DeviceType.Z3L: DeviceCategory.dimmer,
-    DeviceType.NLDD: DeviceCategory.dimmer,
     DeviceType.NLUP: DeviceCategory.switch,
     DeviceType.NLPO: DeviceCategory.switch,
     DeviceType.TPSRS: DeviceCategory.shutter,
     DeviceType.NLUO: DeviceCategory.dimmer,
     DeviceType.NLUI: DeviceCategory.switch,
+    DeviceType.NLUF: DeviceCategory.dimmer,
 }
 
 
@@ -210,6 +210,7 @@ DEVICE_DESCRIPTION_MAP: dict[DeviceType, tuple[str, str]] = {
     DeviceType.NLUI: ("Legrand", "In-wall switch"),
     DeviceType.NLAS: ("Legrand", "Wireless batteryless scene switch"),
     DeviceType.NLTS: ("Legrand", "Motion sensor"),
+    DeviceType.NLUF: ("Legrand", "In-Wall dimmer"),
     # BTicino Classe 300 EOS
     DeviceType.BNCX: ("BTicino", "Internal Panel"),
     DeviceType.BNEU: ("BTicino", "External Unit"),
