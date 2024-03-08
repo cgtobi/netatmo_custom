@@ -5,4 +5,4 @@ default_config:
 logger:
   default: info
   logs:
-    custom_components.netatmo: debug
+    custom_components.netatmo_custom: debug
