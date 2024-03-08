@@ -5,8 +5,15 @@ import logging
 from typing import Any, cast
 
 import aiohttp
-from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
-from .pyatmo.event import Event as NaEvent
+
+try:
+    from pyatmo import ApiError as NetatmoApiError, modules as NaModules
+    from pyatmo.event import Event as NaEvent
+except:
+    from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
+    from .pyatmo.event import Event as NaEvent
+
+
 import voluptuous as vol
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
@@ -39,7 +46,7 @@ from .const import (
     WEBHOOK_PUSH_TYPE,
 )
 from .data_handler import EVENT, HOME, SIGNAL_NAME, NetatmoDevice
-from .netatmo_entity_base import NetatmoBase
+from .entity import NetatmoBaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,7 +86,7 @@ async def async_setup_entry(
     )
 
 
-class NetatmoCamera(NetatmoBase, Camera):
+class NetatmoCamera(NetatmoBaseEntity, Camera):
     """Representation of a Netatmo camera."""
 
     _attr_brand = MANUFACTURER
@@ -200,9 +207,7 @@ class NetatmoCamera(NetatmoBase, Camera):
             await self._camera.async_update_camera_urls()
 
         if self._camera.local_url:
-            return "{}/live/files/{}/index.m3u8".format(
-                self._camera.local_url, self._quality
-            )
+            return f"{self._camera.local_url}/live/files/{self._quality}/index.m3u8"
         return f"{self._camera.vpn_url}/live/files/{self._quality}/index.m3u8"
 
     @callback

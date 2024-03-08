@@ -1,7 +1,6 @@
 """The Netatmo data handler."""
 from __future__ import annotations
 
-import asyncio
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -10,9 +9,21 @@ import logging
 from time import time
 from typing import Any
 
-from . import pyatmo
-from .pyatmo.modules.device_types import DeviceCategory as NetatmoDeviceCategory
+import aiohttp
+try:
+    import pyatmo
+    from pyatmo.modules.device_types import (
+        DeviceCategory as NetatmoDeviceCategory,
+        DeviceType as NetatmoDeviceType,
+    )
+except:
+    from . import pyatmo
+    from .pyatmo.modules.device_types import (
+        DeviceCategory as NetatmoDeviceCategory,
+        DeviceType as NetatmoDeviceType,
+    )
 
+from homeassistant.components import cloud
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import (
@@ -32,10 +43,12 @@ from .const import (
     NETATMO_CREATE_CAMERA_LIGHT,
     NETATMO_CREATE_CLIMATE,
     NETATMO_CREATE_COVER,
+    NETATMO_CREATE_FAN,
     NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SELECT,
     NETATMO_CREATE_SENSOR,
+    NETATMO_CREATE_ENERGY,
     NETATMO_CREATE_SWITCH,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
@@ -52,8 +65,9 @@ ACCOUNT = "account"
 HOME = "home"
 WEATHER = "weather"
 AIR_CARE = "air_care"
-PUBLIC = "public"
+PUBLIC = NetatmoDeviceType.public
 EVENT = "event"
+ENERGY_MEASURE = "energy"
 
 PUBLISHERS = {
     ACCOUNT: "async_update_topology",
@@ -62,9 +76,14 @@ PUBLISHERS = {
     AIR_CARE: "async_update_air_care",
     PUBLIC: "async_update_public_weather",
     EVENT: "async_update_events",
+    ENERGY_MEASURE: "async_update_energy"
 }
 
 BATCH_SIZE = 3
+DEV_FACTOR = 7
+DEV_LIMIT = 400
+CLOUD_FACTOR = 2
+CLOUD_LIMIT = 150
 DEFAULT_INTERVALS = {
     ACCOUNT: 10800,
     HOME: 300,
@@ -72,6 +91,7 @@ DEFAULT_INTERVALS = {
     AIR_CARE: 300,
     PUBLIC: 600,
     EVENT: 600,
+    ENERGY_MEASURE: 5400
 }
 SCAN_INTERVAL = 60
 
@@ -113,6 +133,7 @@ class NetatmoPublisher:
     name: str
     interval: int
     next_scan: float
+    target: Any
     subscriptions: set[CALLBACK_TYPE | None]
     method: str
     kwargs: dict
@@ -122,6 +143,7 @@ class NetatmoDataHandler:
     """Manages the Netatmo data handling."""
 
     account: pyatmo.AsyncAccount
+    _interval_factor: int
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize self."""
@@ -131,11 +153,21 @@ class NetatmoDataHandler:
         self.publisher: dict[str, NetatmoPublisher] = {}
         self._queue: deque = deque()
         self._webhook: bool = False
+        if config_entry.data["auth_implementation"] == cloud.DOMAIN:
+            self._interval_factor = CLOUD_FACTOR
+            self._rate_limit = CLOUD_LIMIT
+        else:
+            self._interval_factor = DEV_FACTOR
+            self._rate_limit = DEV_LIMIT
+        self.poll_start = time()
+        self.poll_count = 0
 
     async def async_setup(self) -> None:
         """Set up the Netatmo data handler."""
-        async_track_time_interval(
-            self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
+        self.config_entry.async_on_unload(
+            async_track_time_interval(
+                self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
+            )
         )
 
         self.config_entry.async_on_unload(
@@ -156,22 +188,34 @@ class NetatmoDataHandler:
         await self.async_dispatch()
 
     async def async_update(self, event_time: datetime) -> None:
-        """
-        Update device.
+        """Update device.
 
         We do up to BATCH_SIZE calls in one update in order
         to minimize the calls on the api service.
         """
-        for data_class in islice(self._queue, 0, BATCH_SIZE):
+        for data_class in islice(self._queue, 0, BATCH_SIZE * self._interval_factor):
             if data_class.next_scan > time():
                 continue
 
             if publisher := data_class.name:
-                self.publisher[publisher].next_scan = time() + data_class.interval
+                error = await self.async_fetch_data(publisher)
 
-                await self.async_fetch_data(publisher)
+                if error:
+                    self.publisher[publisher].next_scan = (
+                        time() + data_class.interval * 10
+                    )
+                else:
+                    self.publisher[publisher].next_scan = time() + data_class.interval
 
         self._queue.rotate(BATCH_SIZE)
+        cph = self.poll_count / (time() - self.poll_start) * 3600
+        _LOGGER.debug("Calls per hour: %i", cph)
+        if cph > self._rate_limit:
+            for publisher in self.publisher.values():
+                publisher.next_scan += 60
+        if (time() - self.poll_start) > 3600:
+            self.poll_start = time()
+            self.poll_count = 0
 
     @callback
     def async_force_update(self, signal_name: str) -> None:
@@ -193,26 +237,29 @@ class NetatmoDataHandler:
             _LOGGER.debug("%s camera reconnected", MANUFACTURER)
             self.async_force_update(ACCOUNT)
 
-    async def async_fetch_data(self, signal_name: str) -> None:
+    async def async_fetch_data(self, signal_name: str) -> bool:
         """Fetch data and notify."""
+        self.poll_count += 1
+        has_error = False
+
         try:
-            await getattr(self.account, self.publisher[signal_name].method)(
+            await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                 **self.publisher[signal_name].kwargs
             )
 
-        except pyatmo.NoDevice as err:
+        except (pyatmo.NoDevice, pyatmo.ApiError) as err:
             _LOGGER.debug(err)
+            has_error = True
 
-        except pyatmo.ApiError as err:
+        except (TimeoutError, aiohttp.ClientConnectorError) as err:
             _LOGGER.debug(err)
-
-        except asyncio.TimeoutError as err:
-            _LOGGER.debug(err)
-            return
+            return True
 
         for update_callback in self.publisher[signal_name].subscriptions:
             if update_callback:
                 update_callback()
+
+        return has_error
 
     async def subscribe(
         self,
@@ -221,19 +268,35 @@ class NetatmoDataHandler:
         update_callback: CALLBACK_TYPE | None,
         **kwargs: Any,
     ) -> None:
+        await self.subscribe_with_target(publisher=publisher, signal_name=signal_name, target=self.account, update_callback=update_callback, **kwargs)
+
+    async def subscribe_with_target(
+        self,
+        publisher: str,
+        signal_name: str,
+        target: Any,
+        update_callback: CALLBACK_TYPE | None,
+        **kwargs: Any
+    ) -> None:
         """Subscribe to publisher."""
         if signal_name in self.publisher:
             if update_callback not in self.publisher[signal_name].subscriptions:
                 self.publisher[signal_name].subscriptions.add(update_callback)
             return
+        
+        if target is None:
+            target = self.account
 
         if publisher == "public":
             kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
 
+
+        interval = int(DEFAULT_INTERVALS[publisher] / self._interval_factor)
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
-            interval=DEFAULT_INTERVALS[publisher],
-            next_scan=time() + DEFAULT_INTERVALS[publisher],
+            interval=interval,
+            next_scan=time() + interval,
+            target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
             kwargs=kwargs,
@@ -313,14 +376,16 @@ class NetatmoDataHandler:
                 NETATMO_CREATE_CAMERA,
                 NETATMO_CREATE_CAMERA_LIGHT,
             ],
-            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT],
-            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
+            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT, NETATMO_CREATE_SENSOR,  NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER, NETATMO_CREATE_SENSOR,  NETATMO_CREATE_ENERGY],
             NetatmoDeviceCategory.switch: [
                 NETATMO_CREATE_LIGHT,
                 NETATMO_CREATE_SWITCH,
                 NETATMO_CREATE_SENSOR,
+                NETATMO_CREATE_ENERGY,
             ],
-            NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR],
+            NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.fan: [NETATMO_CREATE_FAN, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
         }
         for module in home.modules.values():
             if not module.device_category:

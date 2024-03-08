@@ -15,11 +15,11 @@ from .const import (
     GETSTATIONDATA_ENDPOINT,
     HOME,
     SETSTATE_ENDPOINT,
-    RawData,
+    RawData, MeasureInterval,
 )
-from .helpers import extract_raw_data_new
+from .helpers import extract_raw_data
 from .home import Home
-from .modules.module import MeasureInterval, Module
+from .modules.module import Module
 
 if TYPE_CHECKING:
     from .auth import AbstractAsyncAuth
@@ -31,11 +31,8 @@ class AsyncAccount:
     """Async class of a Netatmo account."""
 
     def __init__(self, auth: AbstractAsyncAuth, favorite_stations: bool = True) -> None:
-        """Initialize the Netatmo account.
+        """Initialize the Netatmo account."""
 
-        Arguments:
-            auth {AbstractAsyncAuth} -- Authentication information with valid access token
-        """
         self.auth: AbstractAsyncAuth = auth
         self.user: str | None = None
         self.homes: dict[str, Home] = {}
@@ -45,12 +42,15 @@ class AsyncAccount:
         self.modules: dict[str, Module] = {}
 
     def __repr__(self) -> str:
+        """Return the representation."""
+
         return (
             f"{self.__class__.__name__}(user={self.user}, home_ids={self.homes.keys()}"
         )
 
     def process_topology(self) -> None:
         """Process topology information from /homesdata."""
+
         for home in self.raw_data["homes"]:
             if (home_id := home["id"]) in self.homes:
                 self.homes[home_id].update_topology(home)
@@ -59,10 +59,11 @@ class AsyncAccount:
 
     async def async_update_topology(self) -> None:
         """Retrieve topology data from /homesdata."""
+
         resp = await self.auth.async_post_api_request(
             endpoint=GETHOMESDATA_ENDPOINT,
         )
-        self.raw_data = extract_raw_data_new(await resp.json(), "homes")
+        self.raw_data = extract_raw_data(await resp.json(), "homes")
 
         self.user = self.raw_data.get("user", {}).get("email")
 
@@ -74,7 +75,7 @@ class AsyncAccount:
             endpoint=GETHOMESTATUS_ENDPOINT,
             params={"home_id": home_id},
         )
-        raw_data = extract_raw_data_new(await resp.json(), HOME)
+        raw_data = extract_raw_data(await resp.json(), HOME)
         await self.homes[home_id].update(raw_data)
 
     async def async_update_events(self, home_id: str) -> None:
@@ -83,7 +84,7 @@ class AsyncAccount:
             endpoint=GETEVENTS_ENDPOINT,
             params={"home_id": home_id},
         )
-        raw_data = extract_raw_data_new(await resp.json(), HOME)
+        raw_data = extract_raw_data(await resp.json(), HOME)
         await self.homes[home_id].update(raw_data)
 
     async def async_update_weather_stations(self) -> None:
@@ -105,9 +106,13 @@ class AsyncAccount:
         start_time: int | None = None,
         interval: MeasureInterval = MeasureInterval.HOUR,
         days: int = 7,
+        end_time: int | None = None
     ) -> None:
+        """Retrieve measures data from /getmeasure."""
+
         await getattr(self.homes[home_id].modules[module_id], "async_update_measures")(
             start_time=start_time,
+            end_time=end_time,
             interval=interval,
             days=days,
         )
@@ -124,6 +129,7 @@ class AsyncAccount:
         area_id: str = str(uuid4()),
     ) -> str:
         """Register public weather area to monitor."""
+
         self.public_weather_areas[area_id] = modules.PublicWeatherArea(
             lat_ne,
             lon_ne,
@@ -135,7 +141,7 @@ class AsyncAccount:
         return area_id
 
     async def async_update_public_weather(self, area_id: str) -> None:
-        """Retrieve status data from /getpublicdata"""
+        """Retrieve status data from /getpublicdata."""
         params = {
             "lat_ne": self.public_weather_areas[area_id].location.lat_ne,
             "lon_ne": self.public_weather_areas[area_id].location.lon_ne,
@@ -161,7 +167,7 @@ class AsyncAccount:
     ) -> None:
         """Retrieve status data from <endpoint>."""
         resp = await self.auth.async_post_api_request(endpoint=endpoint, params=params)
-        raw_data = extract_raw_data_new(await resp.json(), tag)
+        raw_data = extract_raw_data(await resp.json(), tag)
         await self.update_devices(raw_data, area_id)
 
     async def async_set_state(self, home_id: str, data: dict[str, Any]) -> None:
@@ -188,7 +194,6 @@ class AsyncAccount:
         area_id: str | None = None,
     ) -> None:
         """Update device states."""
-        home_id_none = False
         for device_data in raw_data.get("devices", {}):
             if home_id := device_data.get(
                 "home_id",
@@ -215,15 +220,7 @@ class AsyncAccount:
                     {HOME: {"modules": [normalize_weather_attributes(device_data)]}},
                 )
             else:
-                LOG.debug(
-                    "No home %s of device %s (%s) found.",
-                    home_id,
-                    device_data["_id"],
-                    device_data["type"],
-                )
-                if home_id is None and not home_id_none:
-                    home_id_none = True
-                    LOG.debug("home %s raw: %s", home_id, raw_data)
+                LOG.debug("No home %s found.", home_id)
 
             for module_data in device_data.get("modules", []):
                 module_data["home_id"] = home_id

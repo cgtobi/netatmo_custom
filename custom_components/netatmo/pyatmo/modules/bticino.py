@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from ..modules.module import Module, Switch
+from ..modules.module import Dimmer, Module, Shutter, Switch, OffloadMixin
 
 LOG = logging.getLogger(__name__)
 
@@ -22,3 +22,47 @@ class BNCX(Module):
 
 class BNEU(Module):
     """BTicino external unit."""
+
+
+class BNCS(Switch):
+    """Bticino module Controlled Socket."""
+
+
+class BNXM(Module):
+    """BTicino X meter."""
+
+
+class BNMS(Shutter):
+    """BTicino motorized shade."""
+
+
+class BNAS(Shutter):
+    """BTicino automatic shutter."""
+
+
+class BNAB(Shutter):
+    """BTicino automatic blind."""
+
+
+class BNMH(Module):
+    """BTicino MyHome server."""
+
+
+class BNTH(Module):
+    """BTicino thermostat."""
+
+
+class BNFC(Module):
+    """BTicino fan coil."""
+
+
+class BNTR(Module):
+    """BTicino radiator thermostat."""
+
+
+class BNIL(Switch, OffloadMixin):
+    """BTicino itelligent light."""
+
+
+class BNLD(Dimmer):
+    """BTicino dimmer light."""

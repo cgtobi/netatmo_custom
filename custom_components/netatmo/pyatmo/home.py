@@ -15,14 +15,15 @@ from .const import (
     SETSTATE_ENDPOINT,
     SETTHERMMODE_ENDPOINT,
     SWITCHHOMESCHEDULE_ENDPOINT,
-    RawData,
+    SYNCHOMESCHEDULE_ENDPOINT,
+    RawData, SCHEDULE_TYPE_THERM, SCHEDULE_TYPE_ELECTRICITY, MeasureType, ENERGY_ELEC_PEAK_IDX, ENERGY_ELEC_OFF_IDX,
 )
 from .event import Event
-from .exceptions import InvalidState, NoSchedule
+from .exceptions import InvalidSchedule, InvalidState, NoSchedule
 from .modules import Module
 from .person import Person
 from .room import Room
-from .schedule import Schedule
+from .schedule import Schedule, schedule_factory, ThermSchedule
 
 if TYPE_CHECKING:
     from .auth import AbstractAsyncAuth
@@ -38,11 +39,16 @@ class Home:
     name: str
     rooms: dict[str, Room]
     modules: dict[str, Module]
-    schedules: dict[str, Schedule]
+    schedules: dict[str, ThermSchedule] #for compatibility should diseappear
+    all_schedules: dict[dict[str, str, Schedule]]
     persons: dict[str, Person]
     events: dict[str, Event]
+    energy_endpoints: list[str]
+    energy_schedule: list[int]
 
     def __init__(self, auth: AbstractAsyncAuth, raw_data: RawData) -> None:
+        """Initialize a Netatmo home instance."""
+
         self.auth = auth
         self.entity_id = raw_data["id"]
         self.name = raw_data.get("name", "Unknown")
@@ -58,16 +64,75 @@ class Home:
             )
             for room in raw_data.get("rooms", [])
         }
-        self.schedules = {
-            s["id"]: Schedule(home=self, raw_data=s)
-            for s in raw_data.get(SCHEDULES, [])
-        }
+        self._handle_schedules(raw_data.get(SCHEDULES, []))
         self.persons = {
             s["id"]: Person(home=self, raw_data=s) for s in raw_data.get("persons", [])
         }
         self.events = {}
 
-    def get_module(self, module) -> Module:
+    def _handle_schedules(self, raw_data):
+
+        schedules = {}
+
+        for s in raw_data:
+            #strange but Energy plan are stored in schedules, we should handle this one differently
+            sched, type = schedule_factory(home=self, raw_data=s)
+            if type not in schedules:
+                schedules[type] = {}
+            schedules[type][s["id"]] = sched
+
+        self.schedules = schedules.get(SCHEDULE_TYPE_THERM, {})
+        self.all_schedules = schedules
+
+        nrj_schedule = next(iter(schedules.get(SCHEDULE_TYPE_ELECTRICITY, {}).values()), None)
+
+        self.energy_schedule_vals = []
+        self.energy_endpoints =  [MeasureType.SUM_ENERGY_ELEC_BASIC.value]
+        if nrj_schedule is not None:
+            type_tariff = nrj_schedule.tariff_option
+            zones = nrj_schedule.zones
+
+            if type_tariff == "peak_and_off_peak" and len(zones) >= 2:
+
+
+
+                self.energy_endpoints = [None, None]
+
+                self.energy_endpoints[ENERGY_ELEC_PEAK_IDX] = MeasureType.SUM_ENERGY_ELEC_PEAK.value
+                self.energy_endpoints[ENERGY_ELEC_OFF_IDX] = MeasureType.SUM_ENERGY_ELEC_OFF_PEAK.value
+
+                if zones[0].price_type == "peak":
+                    peak_id = zones[0].entity_id
+                    off_peak_id = zones[1].entity_id
+
+                else:
+                    peak_id = zones[1].entity_id
+                    off_peak_id = zones[0].entity_id
+
+                timetable = nrj_schedule.timetable
+
+                #timetable are daily for electricity type, and sorted from begining to end
+                for t in timetable:
+
+                    time = t.m_offset*60 #m_offset is in minute from the begininng of the day
+                    if len(self.energy_schedule_vals) == 0:
+                        time = 0
+
+                    pos_to_add = ENERGY_ELEC_OFF_IDX
+                    if t.zone_id == peak_id:
+                        pos_to_add = ENERGY_ELEC_PEAK_IDX
+
+                    self.energy_schedule_vals.append((time,pos_to_add))
+
+
+            else:
+                self.energy_endpoints = [MeasureType.SUM_ENERGY_ELEC_BASIC.value]
+
+
+
+    def get_module(self, module: dict) -> Module:
+        """Return module."""
+
         try:
             return getattr(modules, module["type"])(
                 home=self,
@@ -81,6 +146,8 @@ class Home:
             )
 
     def update_topology(self, raw_data: RawData) -> None:
+        """Update topology."""
+
         self.name = raw_data.get("name", "Unknown")
 
         raw_modules = raw_data.get("modules", [])
@@ -112,12 +179,11 @@ class Home:
         for room in self.rooms.keys() - {m["id"] for m in raw_rooms}:
             self.rooms.pop(room)
 
-        self.schedules = {
-            s["id"]: Schedule(home=self, raw_data=s)
-            for s in raw_data.get(SCHEDULES, [])
-        }
+        self._handle_schedules(raw_data.get(SCHEDULES, []))
 
     async def update(self, raw_data: RawData) -> None:
+        """Update home with the latest data."""
+
         for module in raw_data.get("errors", []):
             await self.modules[module["id"]].update({})
 
@@ -147,32 +213,45 @@ class Home:
                     ],
                 )
 
-    def get_selected_schedule(self) -> Schedule | None:
+    def get_selected_schedule(self, type :str = None) -> Schedule | None:
         """Return selected schedule for given home."""
+        if type is None:
+            type = SCHEDULE_TYPE_THERM
+
+        schedules = self.all_schedules.get(type, {})
+
         return next(
-            (schedule for schedule in self.schedules.values() if schedule.selected),
+            (schedule for schedule in schedules.values() if schedule.selected),
             None,
         )
 
+    def get_selected_temperature_schedule(self) -> ThermSchedule | None:
+        return self.get_selected_schedule(type=SCHEDULE_TYPE_THERM)
+
     def is_valid_schedule(self, schedule_id: str) -> bool:
         """Check if valid schedule."""
-        return schedule_id in self.schedules
+        for schedules in self.all_schedules.values():
+            if schedule_id in schedules:
+                return True
+
+        return False
 
     def has_otm(self) -> bool:
-        for room in self.rooms.values():
-            if "OTM" in room.device_types:
-                return True
-        return False
+        """Check if any room has an OTM device."""
+
+        return any("OTM" in room.device_types for room in self.rooms.values())
 
     def get_hg_temp(self) -> float | None:
         """Return frost guard temperature value for given home."""
-        if (schedule := self.get_selected_schedule()) is None:
+
+        if (schedule := self.get_selected_temperature_schedule()) is None:
             return None
         return schedule.hg_temp
 
     def get_away_temp(self) -> float | None:
         """Return configured away temperature value for given home."""
-        if (schedule := self.get_selected_schedule()) is None:
+
+        if (schedule := self.get_selected_temperature_schedule()) is None:
             return None
         return schedule.away_temp
 
@@ -248,6 +327,7 @@ class Home:
         person_id: str | None = None,
     ) -> ClientResponse:
         """Mark a person as away or set the whole home to being empty."""
+
         post_params = {"home_id": self.entity_id}
         if person_id:
             post_params["person_id"] = person_id
@@ -256,7 +336,91 @@ class Home:
             params=post_params,
         )
 
+    async def async_set_schedule_temperatures(
+        self,
+        zone_id: int,
+        temps: dict[str, int],
+    ) -> None:
+        """Set the scheduled room temperature for the given schedule ID."""
+
+        selected_schedule = self.get_selected_temperature_schedule()
+
+        if selected_schedule is None:
+            raise NoSchedule("Could not determine selected schedule.")
+
+        zones = []
+
+        timetable_entries = [
+            {
+                "m_offset": timetable_entry.m_offset,
+                "zone_id": timetable_entry.zone_id,
+            }
+            for timetable_entry in selected_schedule.timetable
+        ]
+
+        for zone in selected_schedule.zones:
+            new_zone = {
+                "id": zone.entity_id,
+                "name": zone.name,
+                "type": zone.type,
+                "rooms": [],
+            }
+
+            for room in zone.rooms:
+                temp = room.therm_setpoint_temperature
+                if zone.entity_id == zone_id and room.entity_id in temps:
+                    temp = temps[room.entity_id]
+
+                new_zone["rooms"].append(
+                    {"id": room.entity_id, "therm_setpoint_temperature": temp},
+                )
+
+            zones.append(new_zone)
+
+        schedule = {
+            "away_temp": selected_schedule.away_temp,
+            "hg_temp": selected_schedule.hg_temp,
+            "timetable": timetable_entries,
+            "zones": zones,
+        }
+
+        await self.async_sync_schedule(selected_schedule.entity_id, schedule)
+
+    async def async_sync_schedule(
+        self,
+        schedule_id: str,
+        schedule: dict[str, Any],
+    ) -> None:
+        """Modify an existing schedule."""
+        if not is_valid_schedule(schedule):
+            raise InvalidSchedule("Data for '/synchomeschedule' contains errors.")
+        LOG.debug(
+            "Setting schedule (%s) for home (%s) to %s",
+            schedule_id,
+            self.entity_id,
+            schedule,
+        )
+
+        resp = await self.auth.async_post_api_request(
+            endpoint=SYNCHOMESCHEDULE_ENDPOINT,
+            params={
+                "params": {
+                    "home_id": self.entity_id,
+                    "schedule_id": schedule_id,
+                    "name": "Default",
+                },
+                "json": schedule,
+            },
+        )
+
+        return (await resp.json()).get("status") == "ok"
+
 
 def is_valid_state(data: dict[str, Any]) -> bool:
     """Check set state data."""
     return data is not None
+
+
+def is_valid_schedule(schedule: dict[str, Any]) -> bool:
+    """Check schedule."""
+    return schedule is not None

@@ -1,13 +1,8 @@
 {
-  "name": "Netatmo Component",
-  "render_readme": true,
-  "domains": [
-    "camera",
-    "climate",
-    "light",
-    "select",
-    "sensor",
-    "cover",
-    "switch"
-  ]
+    "name": "Netatmo Component",
+    "homeassistant": "2023.8.0",
+    "render_readme": true,
+    "hacs": "1.6.0",
+    "domains": ["camera", "cover", "fan", "media_player", "sensor", "select", "light", "climate", "switch"],
+    "iot_class": "Cloud Polling"
 }
