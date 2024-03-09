@@ -8,9 +8,10 @@ from typing import Any
 
 import aiohttp
 try:
-    import pyatmo
-except:
     from . import pyatmo
+except:
+    import pyatmo
+
 
 from homeassistant.components import cloud
 from homeassistant.components.webhook import (

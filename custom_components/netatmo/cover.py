@@ -5,9 +5,9 @@ import logging
 from typing import Any, cast
 
 try:
-    from pyatmo import modules as NaModules
-except:
     from .pyatmo import modules as NaModules
+except:
+    from pyatmo import modules as NaModules
 
 from homeassistant.components.cover import (
     ATTR_POSITION,

@@ -241,7 +241,6 @@ class NetatmoDataHandler:
         """Fetch data and notify."""
         self.poll_count += 1
         has_error = False
-
         try:
             await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                 **self.publisher[signal_name].kwargs

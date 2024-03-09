@@ -5,11 +5,12 @@ import logging
 from typing import Any, cast
 
 try:
-    from pyatmo.modules import NATherm1
-    from pyatmo.modules.device_types import DeviceType
-except:
     from .pyatmo.modules import NATherm1
     from .pyatmo.modules.device_types import DeviceType
+except:
+    from pyatmo.modules import NATherm1
+    from pyatmo.modules.device_types import DeviceType
+
 
 import voluptuous as vol
 

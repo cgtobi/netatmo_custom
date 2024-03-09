@@ -575,7 +575,7 @@ class NetatmoBaseSensor(NetatmoBaseEntity, SensorEntity):
 
         self.complement_publishers(netatmo_device)
 
-   @abstractmethod
+    @abstractmethod
     def complement_publishers(self, netatmo_device):
         """abstract method to fill publishers"""
 
