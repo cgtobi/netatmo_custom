@@ -14,6 +14,10 @@
         {
           "localRoot": "${workspaceFolder}",
           "remoteRoot": "."
+        },
+        {
+          "localRoot": "${workspaceFolder}/custom_components/netatmo",
+          "remoteRoot": "./custom_components/netatmo"
         }
       ]
     },

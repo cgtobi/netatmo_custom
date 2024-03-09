@@ -1,9 +1,12 @@
 """Support for the Netatmo sensors."""
 from __future__ import annotations
 
+from abc import abstractmethod
 from dataclasses import dataclass
 import logging
-from typing import cast
+from typing import cast, Any
+from datetime import datetime
+from datetime import timedelta
 
 try:
     from . import pyatmo
@@ -614,7 +617,7 @@ class NetatmoSensor(NetatmoBaseSensor):
 
 class NetatmoEnergySensor(NetatmoBaseSensor):
     """Implementation of an energy Netatmo sensor."""
-    _to_reset_at : int
+    _to_reset_at : datetime | None
     
     def __init__(
         self,
@@ -629,14 +632,32 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             [
                 {
                     "name": ENERGY_MEASURE,
-                    "target": self,
+                    "target_module": self,
                     SIGNAL_NAME: self._attr_unique_id,
                 },
             ]
         )
 
 
-    #to be called on teh object itself
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        #TODO_ENERGY
+        """Return the state attributes of the security zone group."""
+        state_attr = super().extra_state_attributes
+
+        #for attr, attr_key in GROUP_ATTRIBUTES.items():
+        #    if attr_value := getattr(self._device, attr, None):
+        #        state_attr[attr_key] = attr_value
+
+        #window_state = getattr(self._device, "windowState", None)
+        #if window_state and window_state != WindowState.CLOSED:
+        #    state_attr[ATTR_WINDOW_STATE] = str(window_state)
+
+        return state_attr
+
+
+
+    #to be called on the object itself
     async def async_update_energy(self, **kwargs):        
         
         if self._to_reset_at is not None:

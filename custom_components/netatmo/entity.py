@@ -49,17 +49,13 @@ class NetatmoBaseEntity(Entity):
             signal_name = publisher[SIGNAL_NAME]
 
 
-            #TODO_ENERGY ajouter en fait un subbscribe qui passe aussi le module (ici la base entitiy) et la method sera appliquee
-            #sur lui
-
             if "target_module" in publisher:
-                    await self.data_handler.subscribe(
-                    publisher["name"],
-                    signal_name,
-                    self.async_update_callback,
-                    home_id=publisher["home_id"],
+                    await self.data_handler.subscribe_with_target(
+                    publisher=publisher["name"],
+                    signal_name=signal_name,
+                    target=publisher["target_module"],
+                    update_callback=self.async_update_callback
                 )
-                
             elif "home_id" in publisher:
                 await self.data_handler.subscribe(
                     publisher["name"],
