@@ -4,7 +4,10 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from pyatmo import modules as NaModules
+try:
+    from .pyatmo import modules as NaModules
+except:
+    from pyatmo import modules as NaModules
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry

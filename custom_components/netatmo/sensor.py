@@ -5,7 +5,10 @@ from dataclasses import dataclass
 import logging
 from typing import cast
 
-import pyatmo
+try:
+    from . import pyatmo
+except:
+    import pyatmo
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,

@@ -11,14 +11,14 @@ from typing import Any
 
 import aiohttp
 try:
-    import pyatmo
-    from pyatmo.modules.device_types import (
+    from . import pyatmo
+    from .pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
         DeviceType as NetatmoDeviceType,
     )
 except:
-    from . import pyatmo
-    from .pyatmo.modules.device_types import (
+    import pyatmo
+    from pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
         DeviceType as NetatmoDeviceType,
     )

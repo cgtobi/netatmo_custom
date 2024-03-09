@@ -3,11 +3,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from pyatmo import DeviceType
-from pyatmo.modules.device_types import (
-    DEVICE_DESCRIPTION_MAP,
-    DeviceType as NetatmoDeviceType,
-)
+try:
+    from .pyatmo import DeviceType
+    from .pyatmo.modules.device_types import (
+        DEVICE_DESCRIPTION_MAP,
+        DeviceType as NetatmoDeviceType,
+    )
+except:
+    from pyatmo import DeviceType
+    from pyatmo.modules.device_types import (
+        DEVICE_DESCRIPTION_MAP,
+        DeviceType as NetatmoDeviceType,
+    )
 
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr

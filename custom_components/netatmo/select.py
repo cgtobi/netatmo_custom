@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import logging
 
-from pyatmo import DeviceType
+try:
+    from .pyatmo import DeviceType
+except:
+    from pyatmo import DeviceType
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
