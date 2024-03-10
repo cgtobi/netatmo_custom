@@ -308,11 +308,15 @@ class NetatmoDataHandler:
             kwargs=kwargs,
         )
 
-        try:
-            await self.async_fetch_data(signal_name)
-        except KeyError:
-            self.publisher.pop(signal_name)
-            raise
+        if target != self.account:
+            #do that only if it is on account, is get measure or other ... don't do too much here has it will kill the number of calls
+            try:
+                await self.async_fetch_data(signal_name)
+            except KeyError:
+                #in case we have a bad formed reponse
+                self.publisher.pop(signal_name)
+                _LOGGER.debug("!!!!!! Publisher %s removed at subscription due to mal formed response!!!!!!", signal_name)
+                raise
 
         self._queue.append(self.publisher[signal_name])
         _LOGGER.debug("Publisher %s added", signal_name)
