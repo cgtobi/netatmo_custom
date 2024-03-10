@@ -618,7 +618,8 @@ class NetatmoSensor(NetatmoBaseSensor):
 class NetatmoEnergySensor(NetatmoBaseSensor):
     """Implementation of an energy Netatmo sensor."""
     _to_reset_at : datetime | None
-    
+    _last_reset: datetime | None
+
     def __init__(
         self,
         netatmo_device: NetatmoDevice
@@ -638,40 +639,22 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             ]
         )
 
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        #TODO_ENERGY
-        """Return the state attributes of the security zone group."""
-        state_attr = super().extra_state_attributes
-
-        #for attr, attr_key in GROUP_ATTRIBUTES.items():
-        #    if attr_value := getattr(self._device, attr, None):
-        #        state_attr[attr_key] = attr_value
-
-        #window_state = getattr(self._device, "windowState", None)
-        #if window_state and window_state != WindowState.CLOSED:
-        #    state_attr[ATTR_WINDOW_STATE] = str(window_state)
-
-        return state_attr
-
-
-
     #to be called on the object itself
     async def async_update_energy(self, **kwargs):        
         
         if self._to_reset_at is not None:
             #force a reset of the energy counter
             self._module.reset_measures()
-            self._attr_last_reset = self._to_reset_at
+            self._last_reset = self._to_reset_at
             self._to_reset_at = None
         else:
             
             end = datetime.now()
             #go at the last reset
-            start = self._attr_last_reset
+            start = self._last_reset
             if start is None:
                 start = datetime(end.year, end.month, end.day) + timedelta(seconds=1)
+                self._last_reset
             
             
             #check that "now" has passed the current day or not 
