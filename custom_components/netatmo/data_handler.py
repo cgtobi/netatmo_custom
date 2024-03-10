@@ -241,11 +241,11 @@ class NetatmoDataHandler:
         """Fetch data and notify."""
         self.poll_count += 1
         has_error = False
+        num_fetch = None
         try:
-            await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
+            num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                 **self.publisher[signal_name].kwargs
             )
-
         except (pyatmo.NoDevice, pyatmo.ApiError) as err:
             _LOGGER.debug(err)
             has_error = True
@@ -253,6 +253,13 @@ class NetatmoDataHandler:
         except (TimeoutError, aiohttp.ClientConnectorError) as err:
             _LOGGER.debug(err)
             return True
+
+        try:
+            num_fetch = int(num_fetch)
+            if num_fetch > 1:
+                self.poll_count += num_fetch - 1
+        except:
+            pass
 
         for update_callback in self.publisher[signal_name].subscriptions:
             if update_callback:
