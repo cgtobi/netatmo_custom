@@ -7,8 +7,8 @@ logger:
   logs:
     custom_components.netatmo: debug
 # If you need to debug uncommment the line below (doc: https://www.home-assistant.io/integrations/debugpy/)
-debugpy:
-  start: true
-  wait: true
-  port: 5678
+#debugpy:
+  #start: true
+  #wait: true
+  #port: 5678
 

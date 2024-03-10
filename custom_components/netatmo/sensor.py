@@ -627,6 +627,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
         self._to_reset_at = None
+        self._last_reset = None
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -643,7 +644,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     async def async_update_energy(self, **kwargs):        
         
         if self._to_reset_at is not None:
-            #force a reset of the energy counter
+            #force a reset of the energy counter, the update call back will store it
             self._module.reset_measures()
             self._last_reset = self._to_reset_at
             self._to_reset_at = None
@@ -653,16 +654,16 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             #go at the last reset
             start = self._last_reset
             if start is None:
-                start = datetime(end.year, end.month, end.day) + timedelta(seconds=1)
-                self._last_reset
+                #start at the current day
+                start = datetime(end.year, end.month, end.day)
             
             
             #check that "now" has passed the current day or not 
             if start.day != end.day:
-                #we have finished a day, compute the current value to the end of the current day minus 1s
-                end = datetime(start.year, start.month, start.day) + timedelta(hours=24) - timedelta(seconds=1)
-                #prepare a reset for the next time at the 1s of the next day
-                self._to_reset_at = end + timedelta(seconds=2)
+                #we have finished a day, compute the current value to the end of the current day
+                end = datetime(start.year, start.month, start.day) + timedelta(hours=24)
+                #prepare a reset for the next time we have an async update
+                self._to_reset_at = end
             else:
                 #ok it is an intermediate measure
                 self._to_reset_at = None
@@ -671,8 +672,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             start_time = int(start.timestamp())
     
             await self._module.async_update_measures(start_time=start_time, end_time=end_time)
-        
-             #let the callback update the state and the availability
+            #let the callback update the state energy data  and the availability
 
 
 
