@@ -55,7 +55,7 @@ from .const import (
     WEBHOOK_ACTIVATION,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
-    WEBHOOK_PUSH_TYPE,
+    WEBHOOK_PUSH_TYPE, CONF_HOMES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -142,12 +142,13 @@ class NetatmoPublisher:
 class NetatmoDataHandler:
     """Manages the Netatmo data handling."""
 
-    account: pyatmo.AsyncAccount
+    account: pyatmo.AsyncAccount | None
     _interval_factor: int
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize self."""
         self.hass = hass
+        self.account = None
         self.config_entry = config_entry
         self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
         self.publisher: dict[str, NetatmoPublisher] = {}
@@ -178,7 +179,9 @@ class NetatmoDataHandler:
             )
         )
 
-        self.account = pyatmo.AsyncAccount(self._auth)
+        homes = self.config_entry.options.get(CONF_HOMES, [])
+
+        self.account = pyatmo.AsyncAccount(self._auth, support_only_homes=homes)
 
         await self.subscribe(ACCOUNT, ACCOUNT, None)
 
@@ -201,6 +204,7 @@ class NetatmoDataHandler:
                 error = await self.async_fetch_data(publisher)
 
                 if error:
+                    _LOGGER.debug("Error on publisher: %s", publisher)
                     self.publisher[publisher].next_scan = (
                         time() + data_class.interval * 10
                     )
@@ -209,8 +213,9 @@ class NetatmoDataHandler:
 
         self._queue.rotate(BATCH_SIZE)
         cph = self.poll_count / (time() - self.poll_start) * 3600
-        _LOGGER.debug("Calls per hour: %i", cph)
+        _LOGGER.debug("Calls per hour: %i , queue size: %i", cph, len(self._queue))
         if cph > self._rate_limit:
+            _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._rate_limit)
             for publisher in self.publisher.values():
                 publisher.next_scan += 60
         if (time() - self.poll_start) > 3600:
@@ -237,29 +242,34 @@ class NetatmoDataHandler:
             _LOGGER.debug("%s camera reconnected", MANUFACTURER)
             self.async_force_update(ACCOUNT)
 
-    async def async_fetch_data(self, signal_name: str) -> bool:
+    async def async_fetch_data(self, signal_name: str, update_only=False) -> bool:
         """Fetch data and notify."""
-        self.poll_count += 1
         has_error = False
-        num_fetch = None
-        try:
-            num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
-                **self.publisher[signal_name].kwargs
-            )
-        except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-            _LOGGER.debug(err)
-            has_error = True
 
-        except (TimeoutError, aiohttp.ClientConnectorError) as err:
-            _LOGGER.debug(err)
-            return True
+        if update_only is False:
+            self.poll_count += 1
+            _LOGGER.debug("===== Publisher %s Asked", signal_name)
 
-        try:
-            num_fetch = int(num_fetch)
-            if num_fetch > 1:
-                self.poll_count += num_fetch - 1
-        except:
-            pass
+            num_fetch = None
+            try:
+                num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
+                    **self.publisher[signal_name].kwargs
+                )
+                _LOGGER.debug(">>>>> Publisher %s Fetched", signal_name)
+            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
+                _LOGGER.debug(err)
+                has_error = True
+
+            except (TimeoutError, aiohttp.ClientConnectorError) as err:
+                _LOGGER.debug(err)
+                return True
+
+            try:
+                num_fetch = int(num_fetch)
+                if num_fetch > 1:
+                    self.poll_count += num_fetch - 1
+            except:
+                pass
 
         for update_callback in self.publisher[signal_name].subscriptions:
             if update_callback:
@@ -274,7 +284,7 @@ class NetatmoDataHandler:
         update_callback: CALLBACK_TYPE | None,
         **kwargs: Any,
     ) -> None:
-        await self.subscribe_with_target(publisher=publisher, signal_name=signal_name, target=self.account, update_callback=update_callback, **kwargs)
+        await self.subscribe_with_target(publisher=publisher, signal_name=signal_name, target=None, update_callback=update_callback, **kwargs)
 
     async def subscribe_with_target(
         self,
@@ -289,9 +299,13 @@ class NetatmoDataHandler:
             if update_callback not in self.publisher[signal_name].subscriptions:
                 self.publisher[signal_name].subscriptions.add(update_callback)
             return
-        
+
+
         if target is None:
             target = self.account
+            update_only = False
+        else:
+            update_only = True
 
         if publisher == "public":
             kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
@@ -308,15 +322,16 @@ class NetatmoDataHandler:
             kwargs=kwargs,
         )
 
-        if target != self.account:
-            #do that only if it is on account, is get measure or other ... don't do too much here has it will kill the number of calls
-            try:
-                await self.async_fetch_data(signal_name)
-            except KeyError:
-                #in case we have a bad formed reponse
-                self.publisher.pop(signal_name)
-                _LOGGER.debug("!!!!!! Publisher %s removed at subscription due to mal formed response!!!!!!", signal_name)
-                raise
+
+
+        #do that only if it is on account, is get measure or other ... don't do too much here has it will kill the number of calls
+        try:
+            await self.async_fetch_data(signal_name, update_only=update_only)
+        except KeyError:
+            #in case we have a bad formed reponse
+            self.publisher.pop(signal_name)
+            _LOGGER.debug("!!!!!! Publisher %s removed at subscription due to mal formed response!!!!!!", signal_name)
+            raise
 
         self._queue.append(self.publisher[signal_name])
         _LOGGER.debug("Publisher %s added", signal_name)

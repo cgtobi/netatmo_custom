@@ -24,7 +24,7 @@ from .const import (
     CONF_NEW_AREA,
     CONF_PUBLIC_MODE,
     CONF_WEATHER_AREAS,
-    DOMAIN,
+    DOMAIN, CONF_HOMES, DATA_HANDLER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,6 +92,7 @@ class NetatmoFlowHandler(
         return await super().async_oauth_create_entry(data)
 
 
+
 class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Netatmo options."""
 
@@ -100,12 +101,19 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
         self.options.setdefault(CONF_WEATHER_AREAS, {})
+        self.options.setdefault(CONF_HOMES, [])
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Return logger."""
+        return logging.getLogger(__name__)
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         """Manage the Netatmo options."""
-        return await self.async_step_public_weather_areas()
+        return await self.async_step_public_weather_areas_and_homes()
 
-    async def async_step_public_weather_areas(
+
+    async def async_step_public_weather_areas_and_homes(
         self, user_input: dict | None = None
     ) -> FlowResult:
         """Manage configuration of Netatmo public weather areas."""
@@ -127,17 +135,42 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
 
         weather_areas = list(self.options[CONF_WEATHER_AREAS])
 
-        data_schema = vol.Schema(
-            {
-                vol.Optional(
-                    CONF_WEATHER_AREAS,
-                    default=weather_areas,
-                ): cv.multi_select({wa: None for wa in weather_areas}),
-                vol.Optional(CONF_NEW_AREA): str,
-            }
-        )
+
+
+        try:
+            homes = {}
+
+            acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes
+
+            for home_id, home in acc_homes.items():
+                homes[home.entity_id] = home.name
+
+            if len(homes) > 0:
+                l_homes = self.options.get(CONF_HOMES, {})
+                schema = {
+                    vol.Optional(
+                        CONF_HOMES,
+                        default=l_homes,
+                    ): cv.multi_select(homes),
+
+                }
+            else:
+                schema = {}
+        except:
+            schema = {}
+
+        schema.update({
+            vol.Optional(
+                CONF_WEATHER_AREAS,
+                default=weather_areas,
+            ): cv.multi_select({wa: None for wa in weather_areas}),
+            vol.Optional(CONF_NEW_AREA): str,
+        })
+
+        data_schema = vol.Schema(schema)
+
         return self.async_show_form(
-            step_id="public_weather_areas",
+            step_id="public_weather_areas_and_homes",
             data_schema=data_schema,
             errors=errors,
         )
@@ -153,7 +186,7 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_UUID
             ] = str(uuid.uuid4())
 
-            return await self.async_step_public_weather_areas()
+            return await self.async_step_public_weather_areas_and_homes()
 
         orig_options = self.config_entry.options.get(CONF_WEATHER_AREAS, {}).get(
             user_input[CONF_NEW_AREA], {}

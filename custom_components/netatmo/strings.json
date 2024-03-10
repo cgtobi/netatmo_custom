@@ -39,13 +39,14 @@
         "description": "Configure a public weather sensor for an area.",
         "title": "Netatmo public weather sensor"
       },
-      "public_weather_areas": {
+      "public_weather_areas_and_homes": {
         "data": {
+          "selected_homes": "Homes (leave all unchecked will import all of your homes))",
           "new_area": "Area name",
           "weather_areas": "Weather areas"
         },
-        "description": "Configure public weather sensors.",
-        "title": "[%key:component::netatmo::options::step::public_weather::title%]"
+        "description": "Define the homes you want support, Configure public weather sensors.",
+        "title": "Home selection and [%key:component::netatmo::options::step::public_weather::title%]"
       }
     }
   },

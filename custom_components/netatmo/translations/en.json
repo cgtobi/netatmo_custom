@@ -46,6 +46,7 @@
         "step": {
             "public_weather": {
                 "data": {
+                    "homes": "Homes (leave all unchecked will import all of your homes))",
                     "area_name": "Name of the area",
                     "lat_ne": "Latitude North-East corner",
                     "lat_sw": "Latitude South-West corner",
@@ -55,15 +56,16 @@
                     "show_on_map": "Show on map"
                 },
                 "description": "Configure a public weather sensor for an area.",
-                "title": "Netatmo public weather sensor"
+                "title": "Home configuration and Netatmo public weather sensor"
             },
-            "public_weather_areas": {
+            "public_weather_areas_and_homes": {
                 "data": {
+                    "selected_homes": "Homes (leave all unchecked will import all of your homes))",
                     "new_area": "Area name",
                     "weather_areas": "Weather areas"
                 },
-                "description": "Configure public weather sensors.",
-                "title": "Netatmo public weather sensor"
+                "description": "Define the homes you want support, Configure public weather sensors.",
+                "title": "Home configuration and Netatmo public weather sensor"
             }
         }
     }
