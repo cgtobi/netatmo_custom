@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+
+
 try:
     from .pyatmo import DeviceType
     from .pyatmo.modules.device_types import (
@@ -54,7 +56,8 @@ class NetatmoBaseEntity(Entity):
                     publisher=publisher["name"],
                     signal_name=signal_name,
                     target=publisher["target_module"],
-                    update_callback=self.async_update_callback
+                    update_callback=self.async_update_callback,
+                    update_only=True
                 )
             elif "home_id" in publisher:
                 await self.data_handler.subscribe(

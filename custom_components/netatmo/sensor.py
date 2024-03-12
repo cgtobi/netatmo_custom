@@ -232,7 +232,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         key="reachable",
         name="Reachability",
         netatmo_name="reachable",
-        entity_registry_enabled_default=False,
+        #entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:signal",
     ),
@@ -309,6 +309,11 @@ async def async_setup_entry(
     def _create_energy_entity(netatmo_device: NetatmoDevice) -> None:
 
         if "sum_energy_elec" in netatmo_device.device.features or hasattr(netatmo_device.device, "sum_energy_elec"):
+            _LOGGER.debug(
+                "Adding %s energy sum sensor %s",
+                netatmo_device.device.device_category,
+                netatmo_device.device.name,
+            )
             entity = NetatmoEnergySensor(netatmo_device)
             async_add_entities([entity])
 
@@ -333,17 +338,18 @@ async def async_setup_entry(
     @callback
     def _create_sensor_entity(netatmo_device: NetatmoDevice) -> None:
         _LOGGER.debug(
-            "Adding %s sensor %s",
+            "Adding %s sensor %s with features: %s",
             netatmo_device.device.device_category,
             netatmo_device.device.name,
+            netatmo_device.device.features
         )
         async_add_entities(
             [
-                NetatmoSensor(netatmo_device, description)
-                for description in SENSOR_TYPES
-                if description.key in netatmo_device.device.features
-            ]
-        )
+            NetatmoSensor(netatmo_device, description)
+            for description in SENSOR_TYPES
+            if description.key in netatmo_device.device.features
+        ]
+            )
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_SENSOR, _create_sensor_entity)
@@ -589,16 +595,24 @@ class NetatmoBaseSensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        if not self._module.reachable:
-            if self.available:
-                self._attr_available = False
-            return
 
-        if (state := getattr(self._module, self.entity_description.key)) is None:
-            return
+        if self.entity_description.key != "reachable":
+
+            if not self._module.reachable:
+                if self.available:
+                    self._attr_available = False
+                return
+
+            if (state := getattr(self._module, self.entity_description.key)) is None:
+                return
+        else:
+            state = self._module.reachable
+            if state is None:
+                state = False
 
         self._attr_available = True
         self._attr_native_value = state
+
 
         self.async_write_ha_state()
 
