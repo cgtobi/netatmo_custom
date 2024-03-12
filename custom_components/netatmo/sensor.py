@@ -663,6 +663,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             self._module.reset_measures()
             self._last_reset = self._to_reset_at
             self._to_reset_at = None
+            _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s last_reset: %s", self.name,  self._last_reset )
         else:
             
             end = datetime.now()

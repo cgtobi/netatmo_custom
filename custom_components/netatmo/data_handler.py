@@ -181,7 +181,7 @@ class NetatmoPublisher:
     method: str
     kwargs: dict
     _emissions : list
-    _rand_delta: int
+    num_consecutive_errors : int
 
     def __init__(self, name, interval, next_scan, target, subscriptions, method, kwargs):
         self.name = name
@@ -192,15 +192,17 @@ class NetatmoPublisher:
         self.method = method
         self.kwargs = kwargs
         self._emissions = []
-        self._rand_delta = interval//4
-    def push_emission(self, ts):
+        self.num_consecutive_errors = 0
 
+    def push_emission(self, ts):
+        self.num_consecutive_errors = 0
         if len(self._emissions) >= MAX_EMISSIONS:
             self._emissions.pop(0)
         self._emissions.append(ts)
 
     def set_next_randomized_scan(self, ts):
-        self.next_scan = ts + self.interval + random.randint(0-self._rand_delta, self._rand_delta)
+        rand_delta = self.interval // 4
+        self.next_scan = ts + self.interval + random.randint(0-rand_delta, rand_delta)
 
     def is_ts_allows_emission(self, ts):
         return self.next_scan < ts + max(SCAN_INTERVAL//2, self.interval//8)
@@ -220,7 +222,6 @@ class NetatmoDataHandler:
         self.publisher: dict[str, NetatmoPublisher] = {}
         self._sorted_publisher : list[NetatmoPublisher] = []
 
-        self._queue: deque = deque()
 
 
         self._webhook: bool = False
@@ -292,6 +293,13 @@ class NetatmoDataHandler:
         )
         await self.async_dispatch()
 
+    def compute_theoretical_call_per_hour(self):
+        num_cph = 0.0
+        for p in self._sorted_publisher:
+            num_cph += 3600.0 / p.interval
+
+        return num_cph
+
 
     def get_publisher_candidates(self, current, n):
         self._sorted_publisher = sorted(self._sorted_publisher,  key=lambda x: x.next_scan)
@@ -307,48 +315,66 @@ class NetatmoDataHandler:
 
         return candidates
 
+    def adjust_intervals_to_target_if_needed(self, target):
+        ctph = self.compute_theoretical_call_per_hour()
+        if ctph >= target:
+            _LOGGER.debug("Shaving interval to comply with the requested rate limit from theoretical %f to %i", ctph, target)
+            # we will shave our intervals
+            for p in self._sorted_publisher:
+                p.interval = (p.interval * target) // ctph
+
 
     async def async_update(self, event_time: datetime) -> None:
         """Update device. """
 
+        #no need all the time but fairly quick
+        self.adjust_intervals_to_target_if_needed(self._hourly_rate_limit)
+
         num_call = self._min_call_per_interval
 
         if self.get_current_call_per_hour() < self._hourly_rate_limit - num_call:
-            num_call = min(self._min_call_per_interval, self._hourly_rate_limit - self.get_current_call_per_hour())
+            num_call = min(self._max_call_per_interval, self._hourly_rate_limit - self.get_current_call_per_hour())
 
         delta_sleep = SCAN_INTERVAL // (3*num_call)
+
+
 
         current = time()
 
         candidates = self.get_publisher_candidates(current, num_call)
 
-        has_error = False
-        for data_class in candidates:
+        if len(candidates) <= 1:
+            delta_sleep = 0
 
-            if delta_sleep > 0:
-                await asyncio.sleep(delta_sleep)
+        for data_class in candidates:
 
             if publisher := data_class.name:
                 error = await self.async_fetch_data(publisher)
 
                 if error:
-                    has_error = True
-                    _LOGGER.debug("Error on publisher: %s", publisher)
+                    data_class.num_consecutive_errors += 1
+                    _LOGGER.debug("Error on publisher: %s, num_errors: %i", publisher, data_class.num_consecutive_errors)
                     #this may be due to a rate limit!
-                    for p in self._sorted_publisher:
-                        p.next_scan += SCAN_INTERVAL*5
-                    break
+
+                    data_class.next_scan = current + SCAN_INTERVAL*(data_class.num_consecutive_errors + 1)
                 else:
                     self.publisher[publisher].push_emission(current)
                     self.publisher[publisher].set_next_randomized_scan(current)
 
+            if delta_sleep > 0:
+                await asyncio.sleep(delta_sleep)
+
 
         cph = self.get_current_call_per_hour()
         _LOGGER.debug("Calls per hour: %i , num call asked: %i num call candidates: %i num pub: %i", cph, num_call, len(candidates), len(self._sorted_publisher))
-        if cph > self._hourly_rate_limit and has_error is False:
+        if cph > self._hourly_rate_limit:
             _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._hourly_rate_limit)
             for publisher in self.publisher.values():
-                publisher.next_scan += 60
+                publisher.next_scan += SCAN_INTERVAL
+
+            self.adjust_intervals_to_target_if_needed((self._hourly_rate_limit*4)/5)
+
+
 
     @callback
     def async_force_update(self, signal_name: str) -> None:
@@ -381,12 +407,15 @@ class NetatmoDataHandler:
                     **self.publisher[signal_name].kwargs
                 )
             except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                _LOGGER.debug(err)
+                _LOGGER.debug("fetch error NoDevice or ApiError: %s", err)
                 has_error = True
 
             except (TimeoutError, aiohttp.ClientConnectorError) as err:
-                _LOGGER.debug(err)
+                _LOGGER.debug("fetch error Timeout or ClientConnectorError: %s", err)
                 return True
+            except Exception as err:
+                _LOGGER.debug("fetch error unknown %s", err)
+                has_error = True
 
             try:
                 num_fetch = int(num_fetch)
@@ -455,11 +484,8 @@ class NetatmoDataHandler:
             raise
 
         self._sorted_publisher.append(self.publisher[signal_name])
-        num_cph = 0.0
-        for p in self._sorted_publisher:
-            num_cph += p.interval/3600.0
 
-        _LOGGER.debug("Publisher %s added current total cph %f / rate limit %i", signal_name, num_cph, self._hourly_rate_limit)
+        _LOGGER.debug("Publisher %s added current total cph %f / rate limit %i", signal_name, self.compute_theoretical_call_per_hour(), self._hourly_rate_limit)
 
     async def unsubscribe(
         self, signal_name: str, update_callback: CALLBACK_TYPE | None
