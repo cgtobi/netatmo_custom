@@ -502,7 +502,7 @@ class NetatmoDataHandler:
 
         self._sorted_publisher.append(self.publisher[signal_name])
 
-        _LOGGER.debug("Publisher %s added current total cph %f / rate limit %i", signal_name, self.compute_theoretical_call_per_hour(), self._hourly_rate_limit)
+        #_LOGGER.debug("Publisher %s added current total cph %f / rate limit %i", signal_name, self.compute_theoretical_call_per_hour(), self._hourly_rate_limit)
 
     async def unsubscribe(
         self, signal_name: str, update_callback: CALLBACK_TYPE | None

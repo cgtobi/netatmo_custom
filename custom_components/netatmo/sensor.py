@@ -632,8 +632,10 @@ class NetatmoSensor(NetatmoBaseSensor):
 
 class NetatmoEnergySensor(NetatmoBaseSensor):
     """Implementation of an energy Netatmo sensor."""
-    _to_reset_at : datetime | None
-    _last_reset: datetime | None
+
+    _last_end: datetime | None
+    _last_start: datetime | None
+    _current_start_anchor: datetime | None
 
     def __init__(
         self,
@@ -641,8 +643,9 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
-        self._to_reset_at = None
-        self._last_reset = None
+        self._current_start_anchor = None
+        self._last_end = None
+        self._last_start = None
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -656,39 +659,39 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         )
 
     #to be called on the object itself
-    async def async_update_energy(self, **kwargs):        
-        
-        if self._to_reset_at is not None:
-            #force a reset of the energy counter, the update call back will store it
-            self._module.reset_measures()
-            self._last_reset = self._to_reset_at
-            self._to_reset_at = None
-            _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s last_reset: %s", self.name,  self._last_reset )
+    async def async_update_energy(self, **kwargs):
+
+        end = datetime.now()
+        if self._last_end is None or self._last_start is None:
+            start = datetime(end.year, end.month, end.day)
+            self._current_start_anchor = start
         else:
-            
-            end = datetime.now()
-            #go at the last reset
-            start = self._last_reset
-            if start is None:
-                #start at the current day
-                start = datetime(end.year, end.month, end.day)
-            
-            
-            #check that "now" has passed the current day or not 
-            if start.day != end.day:
-                #we have finished a day, compute the current value to the end of the current day
-                end = datetime(start.year, start.month, start.day) + timedelta(hours=24)
-                #prepare a reset for the next time we have an async update
-                self._to_reset_at = end
+
+            if self._last_end.day != self._last_start.day:
+                #this is a reset
+                self._module.reset_measures()
+                self._current_start_anchor = self._last_end
+                self._last_start = self._last_end
+                #leave self._last_end so it is a "point" update
+                _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s new anchor: %s", self.name,  self._current_start_anchor )
+                return 0
             else:
-                #ok it is an intermediate measure
-                self._to_reset_at = None
-    
-            end_time = int(end.timestamp())
-            start_time = int(start.timestamp())
-    
-            await self._module.async_update_measures(start_time=start_time, end_time=end_time)
-            #let the callback update the state energy data  and the availability
+                if self._current_start_anchor is None:
+                    self._current_start_anchor = datetime(end.year, end.month, end.day)
+                start = self._current_start_anchor
+
+        end_time = int(end.timestamp())
+        start_time = int(start.timestamp())
+
+        num_calls =  await self._module.async_update_measures(start_time=start_time, end_time=end_time)
+        # let the callback update the state energy data  and the availability
+
+        #do that only in case of success of the call (no excpetion)
+        self._last_start = start
+        self._last_end = end
+
+        return num_calls
+
 
 
 
