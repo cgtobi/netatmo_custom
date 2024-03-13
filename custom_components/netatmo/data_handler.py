@@ -274,10 +274,27 @@ class NetatmoDataHandler:
 
         self.account = pyatmo.AsyncAccount(self._auth, support_only_homes=homes)
 
-        await self.account.async_update_topology()
+        for method in ["async_update_topology", "async_update_status"]:
+            for i in range(3):
+                has_error = False
+                try:
+                    await getattr(self.account, method)()
+                except (pyatmo.NoDevice, pyatmo.ApiError) as err:
+                    _LOGGER.debug("init account.%s error NoDevice or ApiError %s", method, err)
+                    has_error = True
+                except (TimeoutError, aiohttp.ClientConnectorError) as err:
+                    _LOGGER.debug("init account.%s error Timeout or ClientConnectorError: %s", method, err)
+                    has_error = True
+                except Exception as err:
+                    _LOGGER.debug("init account.%s error unknown %s", method, err)
+                    has_error = True
+
+                if has_error is False:
+                    break
+
+                await asyncio.sleep(20)
 
         #adding this here to have the modules with their correct features, etc
-        await self.account.async_update_status(home_id=None)
 
         #do update only as async_update_topology will call the APIS
         await self.subscribe_with_target(
