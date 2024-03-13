@@ -32,6 +32,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers import device_registry as dr
 
 from . import api
 from .const import (
@@ -246,3 +247,15 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
             await cloud.async_delete_cloudhook(hass, entry.data[CONF_WEBHOOK_ID])
         except cloud.CloudNotAvailable:
             pass
+
+#allows to manually delete devices not exposed anymore
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """Remove august config entry from a device if its no longer present."""
+
+    for identifier in device_entry.identifiers:
+        if identifier[0] == DOMAIN and identifier[1] in hass.data[DOMAIN][DATA_DEVICE_IDS]:
+            return False
+
+    return True
