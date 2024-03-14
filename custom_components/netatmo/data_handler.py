@@ -325,7 +325,7 @@ class NetatmoDataHandler:
 
             added_call = 1
             if p.target and p.method_num_call_probe is not None:
-                added_call =  getattr(p.target, p.method)()
+                added_call = getattr(p.target, p.method_num_call_probe)()
 
             num_cph += added_call*(3600.0 / p.interval)
 
