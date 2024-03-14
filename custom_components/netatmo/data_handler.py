@@ -81,7 +81,7 @@ PUBLISHERS = {
 
 
 PUBLISHERS_CALL_PROBER = {
-    ENERGY_MEASURE: "async_update_energy"
+    ENERGY_MEASURE: "update_measures_num_calls"
 }
 
 #Netatmo rate limiting: https://dev.netatmo.com/guideline
