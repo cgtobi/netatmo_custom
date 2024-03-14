@@ -80,6 +80,10 @@ PUBLISHERS = {
 }
 
 
+PUBLISHERS_CALL_PROBER = {
+    ENERGY_MEASURE: "async_update_energy"
+}
+
 #Netatmo rate limiting: https://dev.netatmo.com/guideline
 
 # Application limits
@@ -183,13 +187,14 @@ class NetatmoPublisher:
     _emissions : list
     num_consecutive_errors : int
 
-    def __init__(self, name, interval, next_scan, target, subscriptions, method, kwargs):
+    def __init__(self, name, interval, next_scan, target, subscriptions, method, method_num_call_probe, kwargs):
         self.name = name
         self.interval = interval
         self.next_scan = next_scan
         self.target = target
         self.subscriptions = subscriptions
         self.method = method
+        self.method_num_call_probe = method_num_call_probe
         self.kwargs = kwargs
         self._emissions = []
         self.num_consecutive_errors = 0
@@ -231,21 +236,21 @@ class NetatmoDataHandler:
             limits = NETATMO_DEV_CALL_LIMITS
 
         self._interval_factor = limits[RATE_LIMIT_FACTOR]
-        self._hourly_rate_limit = limits[CALL_PER_HOUR]
+        self._initial_hourly_rate_limit = limits[CALL_PER_HOUR]
+
         self._10s_rate_limit = limits[CALL_PER_TEN_SECONDS]
 
-        self._min_call_per_interval = min((self._hourly_rate_limit*SCAN_INTERVAL)//3600, (SCAN_INTERVAL//10) * self._10s_rate_limit)
-        self._max_call_per_interval = max((self._hourly_rate_limit*SCAN_INTERVAL)//3600, (SCAN_INTERVAL//10) * self._10s_rate_limit)
-
         self.rolling_hour = []
+        self._adjusted_hourly_rate_limit = None
 
 
     def add_api_call(self, n):
 
+        current = time()
         for i in range(n):
-            self.rolling_hour.append(time())
+            self.rolling_hour.append(current)
 
-        while self.rolling_hour[-1] - self.rolling_hour[0] > 3600:
+        while current - self.rolling_hour[0] > 3600:
             self.rolling_hour.pop(0)
 
     def get_current_call_per_hour(self):
@@ -274,11 +279,13 @@ class NetatmoDataHandler:
 
         self.account = pyatmo.AsyncAccount(self._auth, support_only_homes=homes)
 
+        num_calls = 0
+
         for method in ["async_update_topology", "async_update_status"]:
             for i in range(3):
                 has_error = False
                 try:
-                    await getattr(self.account, method)()
+                    num_calls += await getattr(self.account, method)()
                 except (pyatmo.NoDevice, pyatmo.ApiError) as err:
                     _LOGGER.debug("init account.%s error NoDevice or ApiError %s", method, err)
                     has_error = True
@@ -293,6 +300,8 @@ class NetatmoDataHandler:
                     break
 
                 await asyncio.sleep(20)
+
+        self.add_api_call(num_calls)
 
         #adding this here to have the modules with their correct features, etc
 
@@ -313,7 +322,12 @@ class NetatmoDataHandler:
     def compute_theoretical_call_per_hour(self):
         num_cph = 0.0
         for p in self._sorted_publisher:
-            num_cph += 3600.0 / p.interval
+
+            added_call = 1
+            if p.target and p.method_num_call_probe is not None:
+                added_call =  getattr(p.target, p.method)()
+
+            num_cph += added_call*(3600.0 / p.interval)
 
         return num_cph
 
@@ -334,27 +348,33 @@ class NetatmoDataHandler:
 
     def adjust_intervals_to_target_if_needed(self, target):
         ctph = self.compute_theoretical_call_per_hour()
+        self._adjusted_hourly_rate_limit = target
         if ctph >= target:
             _LOGGER.debug("Shaving interval to comply with the requested rate limit from theoretical %f to %i", ctph, target)
             # we will shave our intervals
+            current = time()
             for p in self._sorted_publisher:
                 p.interval = (p.interval * target) // ctph
+                p.set_next_randomized_scan(current)
+
+        self._min_call_per_interval = min((self._adjusted_hourly_rate_limit * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
+        self._max_call_per_interval = max((self._adjusted_hourly_rate_limit * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
+
 
 
     async def async_update(self, event_time: datetime) -> None:
         """Update device. """
 
         #no need all the time but fairly quick
-        self.adjust_intervals_to_target_if_needed(self._hourly_rate_limit)
+        if self._adjusted_hourly_rate_limit is None
+            self.adjust_intervals_to_target_if_needed(self._initial_hourly_rate_limit)
 
         num_call = self._min_call_per_interval
 
-        if self.get_current_call_per_hour() < self._hourly_rate_limit - num_call:
-            num_call = min(self._max_call_per_interval, self._hourly_rate_limit - self.get_current_call_per_hour())
+        if self.get_current_call_per_hour() < self._adjusted_hourly_rate_limit - num_call:
+            num_call = min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - self.get_current_call_per_hour())
 
         delta_sleep = SCAN_INTERVAL // (3*num_call)
-
-
 
         current = time()
 
@@ -384,12 +404,12 @@ class NetatmoDataHandler:
 
         cph = self.get_current_call_per_hour()
         _LOGGER.debug("Calls per hour: %i , num call asked: %i num call candidates: %i num pub: %i", cph, num_call, len(candidates), len(self._sorted_publisher))
-        if cph > self._hourly_rate_limit:
-            _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._hourly_rate_limit)
+        if cph > self._adjusted_hourly_rate_limit:
+            _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._adjusted_hourly_rate_limit)
             for publisher in self.publisher.values():
                 publisher.next_scan += SCAN_INTERVAL
-
-            self.adjust_intervals_to_target_if_needed((self._hourly_rate_limit*4)/5)
+            #remove 20% each time ... may be a lot ...
+            self.adjust_intervals_to_target_if_needed((self._adjusted_hourly_rate_limit * 4) // 5)
 
 
 
@@ -418,7 +438,7 @@ class NetatmoDataHandler:
 
         if update_only is False:
 
-            num_fetch = None
+            num_fetch = 0
             try:
                 num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                     **self.publisher[signal_name].kwargs
@@ -486,6 +506,7 @@ class NetatmoDataHandler:
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
+            method_num_call_probe=PUBLISHERS_CALL_PROBER.get(publisher, None),
             kwargs=kwargs,
         )
 
@@ -502,7 +523,7 @@ class NetatmoDataHandler:
 
         self._sorted_publisher.append(self.publisher[signal_name])
 
-        #_LOGGER.debug("Publisher %s added current total cph %f / rate limit %i", signal_name, self.compute_theoretical_call_per_hour(), self._hourly_rate_limit)
+        #_LOGGER.debug("Publisher %s added current total cph %f / rate limit %i", signal_name, self.compute_theoretical_call_per_hour(), self._adjusted_hourly_rate_limit)
 
     async def unsubscribe(
         self, signal_name: str, update_callback: CALLBACK_TYPE | None
