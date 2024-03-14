@@ -366,7 +366,7 @@ class NetatmoDataHandler:
         """Update device. """
 
         #no need all the time but fairly quick
-        if self._adjusted_hourly_rate_limit is None
+        if self._adjusted_hourly_rate_limit is None:
             self.adjust_intervals_to_target_if_needed(self._initial_hourly_rate_limit)
 
         num_call = self._min_call_per_interval
