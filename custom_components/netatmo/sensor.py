@@ -657,6 +657,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             ]
         )
 
+    def update_measures_num_calls(self):
+        return self._module.update_measures_num_calls()
     #to be called on the object itself
     async def async_update_energy(self, **kwargs):
 
