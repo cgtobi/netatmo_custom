@@ -594,8 +594,6 @@ class EnergyHistoryMixin(EntityBase):
         self.sum_energy_elec_off_peak: int | None = None
 
     def reset_measures(self):
-        self.start_time = None
-        self.end_time = None
         self.historical_data = []
         self.sum_energy_elec = 0
         self.sum_energy_elec_peak = 0
@@ -747,7 +745,8 @@ class EnergyHistoryMixin(EntityBase):
                     interval_sec = 2*delta_range
 
 
-                cur_start_time = start_lot_time
+                #align the start on the begining of the segment
+                cur_start_time = start_lot_time - interval_sec//2
                 for val_arr in values_lot.get("value",[]):
                     val = val_arr[0]
 
@@ -758,14 +757,15 @@ class EnergyHistoryMixin(EntityBase):
                         #offset from start of the day
                         day_origin = int(datetime(d_srt.year, d_srt.month, d_srt.day).timestamp())
                         srt_beg = cur_start_time - day_origin
+                        srt_mid = srt_beg + interval_sec//2
 
                         #now check if srt_beg is in a schedule span of the right type
-                        idx_start = self._get_proper_in_schedule_index(energy_schedule_vals, srt_beg - interval_sec//2)
+                        idx_limit = self._get_proper_in_schedule_index(energy_schedule_vals, srt_mid)
 
-                        if self.home.energy_schedule_vals[idx_start][1] != cur_energy_peak_or_off_peak_mode:
+                        if self.home.energy_schedule_vals[idx_limit][1] != cur_energy_peak_or_off_peak_mode:
 
                             #we are NOT in a proper schedule time for this time span ... jump to the next one... meaning it is the next day!
-                            if idx_start == len(energy_schedule_vals) - 1:
+                            if idx_limit == len(energy_schedule_vals) - 1:
                                 #should never append with the performed day extension above
                                 self._log_energy_error(start_time, end_time,
                                                        msg=f"bad idx missing {data_points[cur_energy_peak_or_off_peak_mode]}",
@@ -774,7 +774,7 @@ class EnergyHistoryMixin(EntityBase):
                                 return 0
                             else:
                                 #by construction of the energy schedule the next one should be of opposite mode
-                                if energy_schedule_vals[idx_start + 1][1] != cur_energy_peak_or_off_peak_mode:
+                                if energy_schedule_vals[idx_limit + 1][1] != cur_energy_peak_or_off_peak_mode:
                                     self._log_energy_error(start_time, end_time,
                                                            msg=f"bad schedule {data_points[cur_energy_peak_or_off_peak_mode]}",
                                                            body=raw_datas[cur_energy_peak_or_off_peak_mode])
@@ -782,8 +782,8 @@ class EnergyHistoryMixin(EntityBase):
 
 
 
-                                start_time_to_get_closer = energy_schedule_vals[idx_start+1][0]
-                                diff_t = start_time_to_get_closer - srt_beg
+                                start_time_to_get_closer = energy_schedule_vals[idx_limit+1][0]
+                                diff_t = start_time_to_get_closer - srt_mid
                                 cur_start_time = day_origin + srt_beg + (diff_t//interval_sec + 1)*interval_sec
 
                     hist_good_vals.append((cur_start_time, val, cur_energy_peak_or_off_peak_mode))
@@ -798,55 +798,67 @@ class EnergyHistoryMixin(EntityBase):
         self.sum_energy_elec = 0
         self.sum_energy_elec_peak = 0
         self.sum_energy_elec_off_peak = 0
-        self.end_time = end_time
 
-        computed_start = 0
-        computed_end = 0
-        for cur_start_time, val, cur_energy_peak_or_off_peak_mode in hist_good_vals:
-
-            self.sum_energy_elec += val
-
-            if peak_off_peak_mode:
-                mode = "off_peak"
-                if cur_energy_peak_or_off_peak_mode == ENERGY_ELEC_PEAK_IDX:
-                    self.sum_energy_elec_peak += val
-                    mode = "peak"
-                else:
-                    self.sum_energy_elec_off_peak += val
-            else:
-                mode = "standard"
-
-            if computed_start == 0:
-                computed_start = cur_start_time - delta_range
-            computed_end = cur_start_time + delta_range
-
-
-            self.historical_data.append(
-                {
-                    "duration": (2*delta_range)//60,
-                    "startTime": f"{datetime.fromtimestamp(cur_start_time - delta_range + 1, tz=timezone.utc).isoformat().split('+')[0]}Z",
-                    "endTime": f"{datetime.fromtimestamp(cur_start_time + delta_range, tz=timezone.utc).isoformat().split('+')[0]}Z",
-                    "Wh": val,
-                    "energyMode": mode,
-                    "startTimeUnix": cur_start_time - delta_range,
-                    "endTimeUnix": cur_start_time + delta_range
-
-                },
-            )
-
-
-        if prev_sum_energy_elec is not None and prev_sum_energy_elec > self.sum_energy_elec:
+        if len(hist_good_vals) == 0:
+            #nothing has been updated or changed it can nearly be seen as an error, but teh api is answering correctly
+            #so we probably have to reset to 0 anyway as it means there were no exisitng historical data for this time range
             LOG.debug(
-                ">>>>>>>>>> ENERGY GOING DOWN %s from: %s to %s computed_start: %s, computed_end: %s , sum=%f prev_sum=%f prev_start: %s, prev_end %s",
+                "=> NO VALUES energy update %s from: %s to %s,  prev_sum=%s",
                 self.name, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time),
-                datetime.fromtimestamp(computed_start), datetime.fromtimestamp(computed_end), self.sum_energy_elec,
-                prev_sum_energy_elec, datetime.fromtimestamp(prev_start_time), datetime.fromtimestamp(prev_end_time))
-        else:
-            LOG.debug(
-                "=> Success in energy update %s from: %s to %s computed_start: %s, computed_end: %s , sum=%f prev_sum=%s",
-                self.name, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time),
-                datetime.fromtimestamp(computed_start), datetime.fromtimestamp(computed_end), self.sum_energy_elec,
                 prev_sum_energy_elec if prev_sum_energy_elec is not None else "NOTHING")
+        else:
+
+            computed_start = 0
+            computed_end = 0
+            for cur_start_time, val, cur_energy_peak_or_off_peak_mode in hist_good_vals:
+
+                self.sum_energy_elec += val
+
+                if peak_off_peak_mode:
+                    mode = "off_peak"
+                    if cur_energy_peak_or_off_peak_mode == ENERGY_ELEC_PEAK_IDX:
+                        self.sum_energy_elec_peak += val
+                        mode = "peak"
+                    else:
+                        self.sum_energy_elec_off_peak += val
+                else:
+                    mode = "standard"
+
+
+                c_start = cur_start_time
+                c_end = cur_start_time + 2*delta_range
+
+                if computed_start == 0:
+                    computed_start = c_start
+                computed_end = c_end
+
+
+                self.historical_data.append(
+                    {
+                        "duration": (2*delta_range)//60,
+                        "startTime": f"{datetime.fromtimestamp(c_start + 1, tz=timezone.utc).isoformat().split('+')[0]}Z",
+                        "endTime": f"{datetime.fromtimestamp(c_end, tz=timezone.utc).isoformat().split('+')[0]}Z",
+                        "Wh": val,
+                        "energyMode": mode,
+                        "startTimeUnix": c_start,
+                        "endTimeUnix": c_end
+
+                    },
+                )
+
+
+            if prev_sum_energy_elec is not None and prev_sum_energy_elec > self.sum_energy_elec:
+                LOG.debug(
+                    ">>>>>>>>>> ENERGY GOING DOWN %s from: %s to %s computed_start: %s, computed_end: %s , sum=%f prev_sum=%f prev_start: %s, prev_end %s",
+                    self.name, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time),
+                    datetime.fromtimestamp(computed_start), datetime.fromtimestamp(computed_end), self.sum_energy_elec,
+                    prev_sum_energy_elec, datetime.fromtimestamp(prev_start_time), datetime.fromtimestamp(prev_end_time))
+            else:
+                LOG.debug(
+                    "=> Success in energy update %s from: %s to %s computed_start: %s, computed_end: %s , sum=%f prev_sum=%s",
+                    self.name, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time),
+                    datetime.fromtimestamp(computed_start), datetime.fromtimestamp(computed_end), self.sum_energy_elec,
+                    prev_sum_energy_elec if prev_sum_energy_elec is not None else "NOTHING")
 
         return num_calls
 
