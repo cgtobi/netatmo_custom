@@ -134,7 +134,7 @@ DEFAULT_INTERVALS = {
     AIR_CARE: 150,
     PUBLIC: 300,
     EVENT: 300,
-    ENERGY_MEASURE: 5400
+    ENERGY_MEASURE: 3600
 }
 SCAN_INTERVAL = 60
 
@@ -337,14 +337,21 @@ class NetatmoDataHandler:
         #get the ones with the "older" not handled publisher
 
         candidates = []
+        num_predicted_calls = 0
         for p in self._sorted_publisher:
             if p.name is not None:
                 if p.is_ts_allows_emission(current):
-                   candidates.append(p)
-                   if len(candidates) >= n:
+                    added_call = 1
+                    if p.target and p.method_num_call_probe is not None:
+                        added_call = getattr(p.target, p.method_num_call_probe)()
+
+                    if num_predicted_calls + added_call > n:
                         break
 
-        return candidates
+                    num_predicted_calls += added_call
+                    candidates.append(p)
+
+        return candidates, num_predicted_calls
 
     def adjust_intervals_to_target_if_needed(self, target):
         ctph = self.compute_theoretical_call_per_hour()
@@ -378,7 +385,7 @@ class NetatmoDataHandler:
 
         current = time()
 
-        candidates = self.get_publisher_candidates(current, num_call)
+        candidates, num_predicted_calls = self.get_publisher_candidates(current, num_call)
 
         if len(candidates) <= 1:
             delta_sleep = 0
@@ -403,7 +410,7 @@ class NetatmoDataHandler:
 
 
         cph = self.get_current_call_per_hour()
-        _LOGGER.debug("Calls per hour: %i , num call asked: %i num call candidates: %i num pub: %i", cph, num_call, len(candidates), len(self._sorted_publisher))
+        _LOGGER.debug("Calls per hour: %i , num call asked: %i num call candidates: %i num call predicted : %i  num pub: %i", cph, num_call, len(candidates), num_predicted_calls, len(self._sorted_publisher))
         if cph > self._adjusted_hourly_rate_limit:
             _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._adjusted_hourly_rate_limit)
             for publisher in self.publisher.values():
