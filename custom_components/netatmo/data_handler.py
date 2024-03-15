@@ -410,7 +410,7 @@ class NetatmoDataHandler:
 
 
         cph = self.get_current_call_per_hour()
-        _LOGGER.debug("Calls per hour: %i , num call asked: %i num call candidates: %i num call predicted : %i  num pub: %i", cph, num_call, len(candidates), num_predicted_calls, len(self._sorted_publisher))
+        _LOGGER.debug("Calls per hour: %i , num call asked: %i num candidates: %i num call predicted : %i  num pub: %i", cph, num_call, len(candidates), num_predicted_calls, len(self._sorted_publisher))
         if cph > self._adjusted_hourly_rate_limit:
             _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._adjusted_hourly_rate_limit)
             for publisher in self.publisher.values():
