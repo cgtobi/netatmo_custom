@@ -139,6 +139,9 @@ DEFAULT_INTERVALS = {
 SCAN_INTERVAL = 60
 
 
+CPH_ADJUSTEMENT_DOWN = 0.8
+CPH_ADJUSTEMENT_BACK_UP = 1.1
+
 @dataclass
 class NetatmoDevice:
     """Netatmo device class."""
@@ -242,6 +245,7 @@ class NetatmoDataHandler:
 
         self.rolling_hour = []
         self._adjusted_hourly_rate_limit = None
+        self._last_cph_error = None
 
 
     def add_api_call(self, n):
@@ -353,7 +357,7 @@ class NetatmoDataHandler:
 
         return candidates, num_predicted_calls
 
-    def adjust_intervals_to_target_if_needed(self, target):
+    def adjust_intervals_to_target_if_needed(self, target, redo_next_scan=True):
         ctph = self.compute_theoretical_call_per_hour()
         self._adjusted_hourly_rate_limit = target
         if ctph >= target:
@@ -362,7 +366,8 @@ class NetatmoDataHandler:
             current = time()
             for p in self._sorted_publisher:
                 p.interval = (p.interval * target) // ctph
-                p.set_next_randomized_scan(current)
+                if redo_next_scan:
+                    p.set_next_randomized_scan(current)
 
         self._min_call_per_interval = min((self._adjusted_hourly_rate_limit * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
         self._max_call_per_interval = max((self._adjusted_hourly_rate_limit * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
@@ -413,10 +418,14 @@ class NetatmoDataHandler:
         _LOGGER.debug("Calls per hour: %i , num call asked: %i num candidates: %i num call predicted : %i  num pub: %i", cph, num_call, len(candidates), num_predicted_calls, len(self._sorted_publisher))
         if cph > self._adjusted_hourly_rate_limit:
             _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._adjusted_hourly_rate_limit)
-            for publisher in self.publisher.values():
-                publisher.next_scan += SCAN_INTERVAL
-            #remove 20% each time ... may be a lot ...
-            self.adjust_intervals_to_target_if_needed((self._adjusted_hourly_rate_limit * 4) // 5)
+            #remove 20% each time ...
+            self.adjust_intervals_to_target_if_needed(int(self._adjusted_hourly_rate_limit * CPH_ADJUSTEMENT_DOWN))
+            self._last_cph_error = time()
+        else:
+            #try to recover from a too high cph if there have been an error before
+            if self._last_cph_error is not None and time() - self._last_cph_error > 3600:
+                #every "good"  hour window, let get the rate limit up (with a limit) going up only by half what we went down in case of issue (so here 10% up)
+                self.adjust_intervals_to_target_if_needed(max(self._initial_hourly_rate_limit, int(self._adjusted_hourly_rate_limit * CPH_ADJUSTEMENT_BACK_UP)), redo_next_scan=False)
 
 
 
