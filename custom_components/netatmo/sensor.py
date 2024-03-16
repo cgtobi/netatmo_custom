@@ -662,8 +662,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     #to be called on the object itself
     async def async_update_energy(self, **kwargs):
 
-
-        if self._last_end is not None and self._last_end.day != self._current_start_anchor.day:
+        #reset on the sunday evening! so if we change day ...and the prev one was a sunday
+        if self._last_end is not None and self._last_end.day != self._current_start_anchor.day and self._current_start_anchor.weekday() == 6:
             # this is a reset as teh pref one was going over the current day
             self._module.reset_measures()
             self._current_start_anchor = self._last_end

@@ -209,7 +209,7 @@ class NetatmoPublisher:
         self._emissions.append(ts)
 
     def set_next_randomized_scan(self, ts):
-        rand_delta = int(self.interval // 4)
+        rand_delta = int(self.interval // 6)
         self.next_scan = ts + self.interval + random.randint(0-rand_delta, rand_delta)
 
     def is_ts_allows_emission(self, ts):
@@ -357,10 +357,18 @@ class NetatmoDataHandler:
 
         return candidates, num_predicted_calls
 
+    def adjust_per_scan_numbers(self):
+        hrl = self._adjusted_hourly_rate_limit
+        if hrl is None:
+            hrl = self._initial_hourly_rate_limit
+
+        self._min_call_per_interval = min((hrl * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
+        self._max_call_per_interval = max((hrl * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
+
     def adjust_intervals_to_target_if_needed(self, target, redo_next_scan=True):
         ctph = self.compute_theoretical_call_per_hour()
 
-        self._adjusted_hourly_rate_limit = target
+        self._adjusted_hourly_rate_limit = int(target)
         if ctph >= target:
             _LOGGER.info("Shaving interval to comply with the requested rate limit from theoretical %f to %i", ctph, target)
             # we will shave our intervals
@@ -370,10 +378,7 @@ class NetatmoDataHandler:
                 if redo_next_scan:
                     p.set_next_randomized_scan(current)
 
-        self._min_call_per_interval = min((self._adjusted_hourly_rate_limit * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
-        self._max_call_per_interval = max((self._adjusted_hourly_rate_limit * SCAN_INTERVAL) // 3600, (SCAN_INTERVAL // 10) * self._10s_rate_limit)
-
-
+        self.adjust_per_scan_numbers()
 
     async def async_update(self, event_time: datetime) -> None:
         """Update device. """
@@ -521,10 +526,14 @@ class NetatmoDataHandler:
 
 
         interval = int(DEFAULT_INTERVALS[publisher] / self._interval_factor)
+        n = len(self._sorted_publisher)
+        self.adjust_per_scan_numbers()
+        delta_scan = int(SCAN_INTERVAL//(max(self._min_call_per_interval, self._max_call_per_interval)//2 + 1))
+
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
-            next_scan=time() + interval,
+            next_scan=time() + interval//2 + n*delta_scan, #at init time try to get some data
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
