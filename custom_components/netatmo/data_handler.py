@@ -209,7 +209,7 @@ class NetatmoPublisher:
         self._emissions.append(ts)
 
     def set_next_randomized_scan(self, ts):
-        rand_delta = self.interval // 4
+        rand_delta = int(self.interval // 4)
         self.next_scan = ts + self.interval + random.randint(0-rand_delta, rand_delta)
 
     def is_ts_allows_emission(self, ts):
@@ -258,7 +258,7 @@ class NetatmoDataHandler:
             self.rolling_hour.pop(0)
 
     def get_current_call_per_hour(self):
-        return len(self.rolling_hour)
+        return int(len(self.rolling_hour))
 
 
     async def async_setup(self) -> None:
@@ -361,11 +361,11 @@ class NetatmoDataHandler:
         ctph = self.compute_theoretical_call_per_hour()
         self._adjusted_hourly_rate_limit = target
         if ctph >= target:
-            _LOGGER.debug("Shaving interval to comply with the requested rate limit from theoretical %f to %i", ctph, target)
+            _LOGGER.info("Shaving interval to comply with the requested rate limit from theoretical %f to %i", ctph, target)
             # we will shave our intervals
             current = time()
             for p in self._sorted_publisher:
-                p.interval = (p.interval * target) // ctph
+                p.interval = int((p.interval * target) / ctph)
                 if redo_next_scan:
                     p.set_next_randomized_scan(current)
 
