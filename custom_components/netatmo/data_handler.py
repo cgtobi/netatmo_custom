@@ -118,7 +118,7 @@ CALL_PER_TEN_SECONDS = "CALL_PER_10S"
 NETATMO_USER_CALL_LIMITS = {
     CALL_PER_HOUR : 200,
     RATE_LIMIT_FACTOR : 1,
-    CALL_PER_TEN_SECONDS : 2 #to comply with the global limit of (2 * number of users) requests every 10 seconds
+    CALL_PER_TEN_SECONDS : 3 #2 to comply with the global limit of (2 * number of users) requests every 10 seconds
 }
 NETATMO_DEV_CALL_LIMITS = {
     CALL_PER_HOUR : 400,
@@ -134,7 +134,7 @@ DEFAULT_INTERVALS = {
     AIR_CARE: 150,
     PUBLIC: 300,
     EVENT: 300,
-    ENERGY_MEASURE: 3600
+    ENERGY_MEASURE: 2700
 }
 SCAN_INTERVAL = 60
 
