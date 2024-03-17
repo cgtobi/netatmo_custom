@@ -15,4 +15,25 @@ In order to use the custom component please follow the steps below:
 4. Add the custom integration repo https://github.com/cgtobi/netatmo_custom
 5. Add the Netatmo integration
 
-***IMPORTANT**: You have to use `configuration.yaml` (for now)*
+## What does it bring?
+
+### Multiple Homes coverage selection
+
+In you netatmo account you may have multiple homes, all where covered and imported in your homeassitant instance. 
+You can now select the ones you want to cover (some complex houses may have multiple legrand gateways, hence the need to select multiple covered homes)
+
+Once this integration is properly installed
+1. Go tot Settings > Devices & Services > Integrations Select the netatmo one (should have the HACS logo)
+2. Click Configure
+3. If you have multiple Homes, you should see a selector to select the homes to be covered
+4. Unfortunately you will have to manually delete the devices and entities not exposed anymore 
+    - Settings > Devices & Services > Devices
+    - click on each device from the "wrong" homes 
+    - In the device info, click teh three dots and delete, don't worry the integration won't let you delete a devices that is in use
+
+
+### Adding Energy Entities!
+
+We had power entites before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have sensor.mydevice_energy_sum
+
+### Probably some new bugs and some fixes too :)

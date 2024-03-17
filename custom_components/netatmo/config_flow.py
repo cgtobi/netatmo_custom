@@ -101,7 +101,7 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
         self.options.setdefault(CONF_WEATHER_AREAS, {})
-        self.options.setdefault(CONF_HOMES, [])
+        self.options.setdefault(CONF_HOMES, {})
 
     @property
     def logger(self) -> logging.Logger:
@@ -145,8 +145,10 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
             for home_id, home in acc_homes.items():
                 homes[home.entity_id] = home.name
 
-            if len(homes) > 0:
+            if len(homes) > 1:
                 l_homes = self.options.get(CONF_HOMES, {})
+                if len(l_homes) == 0:
+                    l_homes = homes
                 schema = {
                     vol.Optional(
                         CONF_HOMES,

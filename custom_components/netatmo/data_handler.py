@@ -396,6 +396,7 @@ class NetatmoDataHandler:
             delta_sleep = SCAN_INTERVAL // (3*num_call)
         else:
             _LOGGER.info("Getting 0 approved calls: adjusted limit : %f current cph: %i", self._adjusted_hourly_rate_limit, self.get_current_call_per_hour())
+            delta_sleep = 0
 
         current = time()
 

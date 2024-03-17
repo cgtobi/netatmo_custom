@@ -232,7 +232,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
         key="reachable",
         name="Reachability",
         netatmo_name="reachable",
-        #entity_registry_enabled_default=False,
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:signal",
     ),
@@ -644,7 +644,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
         self._current_start_anchor = datetime.now()
-        self._last_end = None
+        self._last_end = self._current_start_anchor
+        self._interval_delta = timedelta(days=18)
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -662,12 +663,12 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     #to be called on the object itself
     async def async_update_energy(self, **kwargs):
 
-        #reset on the sunday evening! so if we change day ...and the prev one was a sunday
-        if self._last_end is not None and self._last_end.day != self._current_start_anchor.day and self._current_start_anchor.weekday() == 6:
-            # this is a reset as teh pref one was going over the current day
+        #reset on the first measure of the monday with at minimum a difference of days of self._interval_delta
+        if self._last_end - self._current_start_anchor >= self._interval_delta and self._last_end.weekday() == 0:
+            # this is a reset as the pref one was going over the current day
             self._module.reset_measures()
             self._current_start_anchor = self._last_end
-            # leave self._last_end so it is a "point" update
+            # leave self._last_end so it is a "point" update, next time the measure will be done at the former last_end
             _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s new anchor: %s", self.name,
                           self._current_start_anchor)
             return 0
@@ -686,8 +687,17 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
             return num_calls
 
+    @callback
+    def async_update_callback(self) -> None:
+        """Update the entity's state."""
 
+        if (state := getattr(self._module, self.entity_description.key, None)) is None:
+            return
 
+        self._attr_available = True
+        self._attr_native_value = state
+
+        self.async_write_ha_state()
 
 
 def process_health(health: int) -> str:
