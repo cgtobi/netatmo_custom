@@ -371,7 +371,7 @@ class NetatmoDataHandler:
         current = int(time())
 
         if do_wait_scan_for_cph_to_target:
-            wait_time = self.get_wait_time_to_reach_targets(current, target)
+            wait_time = self.get_wait_time_to_reach_targets(current, int(target*0.80)) #wait for a bit longer to reach 80% of the target cph to have 20% of room to breath
         else:
             wait_time = 0
 
@@ -403,7 +403,7 @@ class NetatmoDataHandler:
         else:
             tStop = self.rolling_hour[delta - 1]
 
-            return int(current - tStop + SCAN_INTERVAL)
+            return max(SCAN_INTERVAL, int(tStop + 3600 + SCAN_INTERVAL - current))
 
 
     async def async_update(self, event_time: datetime) -> None:
@@ -418,10 +418,7 @@ class NetatmoDataHandler:
 
         cph_init = self.get_current_call_per_hour()
 
-        num_call = self._min_call_per_interval
-
-        if self.get_current_call_per_hour() < self._adjusted_hourly_rate_limit - num_call:
-            num_call = min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - self.get_current_call_per_hour())
+        num_call = max(0, min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - cph_init))
 
         if num_call > 0:
             delta_sleep = SCAN_INTERVAL // (3*num_call)
@@ -462,7 +459,7 @@ class NetatmoDataHandler:
             _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._adjusted_hourly_rate_limit)
             #remove 20% each time ...
             new_target = int(self._adjusted_hourly_rate_limit * CPH_ADJUSTEMENT_DOWN)
-            self.adjust_intervals_to_target(new_target, force_adjust=True, redo_next_scan=True, do_wait_scan_for_cph_to_target=True)
+            self.adjust_intervals_to_target(new_target, force_adjust=False, redo_next_scan=True, do_wait_scan_for_cph_to_target=True)
             self._last_cph_error = current
         else:
             #try to recover from a too high cph if there have been an error before
