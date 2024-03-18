@@ -434,16 +434,19 @@ class NetatmoDataHandler:
         if len(candidates) <= 1:
             delta_sleep = 0
 
-
+        has_been_throttled = False
         for data_class in candidates:
 
             if publisher := data_class.name:
-                error = await self.async_fetch_data(publisher)
+                error, throttling_error = await self.async_fetch_data(publisher)
 
-                if error:
+                if throttling_error:
+                    has_been_throttled = True
+                    break
+                elif error:
                     data_class.num_consecutive_errors += 1
                     _LOGGER.debug("Error on publisher: %s, num_errors: %i", publisher, data_class.num_consecutive_errors)
-                    #this may be due to a rate limit!
+                    #Try again a bit later, this is not a rate limit
                     data_class.next_scan = current + SCAN_INTERVAL*(data_class.num_consecutive_errors + 1)
                 else:
                     self.publisher[publisher].push_emission(current)
@@ -459,8 +462,8 @@ class NetatmoDataHandler:
 
         if self._last_cph_change is None or current - self._last_cph_change > 3600:
 
-            if cph > self._adjusted_hourly_rate_limit and cph > cph_init and num_predicted_calls > 0:
-                _LOGGER.debug("Calls per hour hit rate limit: %i/%i", cph, self._adjusted_hourly_rate_limit)
+            if has_been_throttled or (cph > self._adjusted_hourly_rate_limit and cph > cph_init and num_predicted_calls > 0):
+                _LOGGER.info("Calls per hour hit rate limit: %i/%i throttled API: %s", cph, self._adjusted_hourly_rate_limit, has_been_throttled)
                 #remove 20% each time ...
                 new_target = int(self._adjusted_hourly_rate_limit * CPH_ADJUSTEMENT_DOWN)
                 self.adjust_intervals_to_target(new_target, force_adjust=False, redo_next_scan=True, do_wait_scan_for_cph_to_target=True)
@@ -494,9 +497,11 @@ class NetatmoDataHandler:
             _LOGGER.debug("%s camera reconnected", MANUFACTURER)
             self.async_force_update(ACCOUNT)
 
-    async def async_fetch_data(self, signal_name: str, update_only=False) -> bool:
+    async def async_fetch_data(self, signal_name: str, update_only=False) -> (bool, bool):
         """Fetch data and notify."""
         has_error = False
+        has_throttling_error = False
+
 
         if update_only is False:
 
@@ -505,13 +510,18 @@ class NetatmoDataHandler:
                 num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                     **self.publisher[signal_name].kwargs
                 )
-            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                _LOGGER.debug("fetch error NoDevice or ApiError: %s", err)
+            except (pyatmo.NoDevice) as err:
+                _LOGGER.debug("fetch error NoDevice: %s", err)
                 has_error = True
-
+            except (pyatmo.ApiErrorThrottling) as err:
+                _LOGGER.debug("fetch error Throttling: %s", err)
+                has_throttling_error = True
+            except (pyatmo.ApiError) as err:
+                _LOGGER.debug("fetch error ApiError: %s", err)
+                has_error = True
             except (TimeoutError, aiohttp.ClientConnectorError) as err:
                 _LOGGER.debug("fetch error Timeout or ClientConnectorError: %s", err)
-                return True
+                return True, False
             except Exception as err:
                 _LOGGER.debug("fetch error unknown %s", err)
                 has_error = True
@@ -527,7 +537,7 @@ class NetatmoDataHandler:
             if update_callback:
                 update_callback()
 
-        return has_error
+        return has_error, has_throttling_error
 
     async def subscribe(
         self,
