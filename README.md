@@ -35,5 +35,7 @@ Once this integration is properly installed
 ### Adding Energy Entities!
 
 We had power entites before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have sensor.mydevice_energy_sum
+Something to note : the first day measure you will get will be pretty high and wrong : normal, the energy measure are a sum, and the start is a few week before : so the energy dashboard, without any history wil think that the first day saw a big energy bump because it represents few weeks of consumption, but the day after should be correct.
+
 
 ### Probably some new bugs and some fixes too :)
