@@ -342,6 +342,7 @@ class NetatmoDataHandler:
                 if p.is_ts_allows_emission(current):
                     added_call = 1
                     if p.target and p.method_num_call_probe is not None:
+                        #this can be highly dynamic and could be 0 (like for a reset)
                         added_call = getattr(p.target, p.method_num_call_probe)()
 
                     if num_predicted_calls + added_call > n:

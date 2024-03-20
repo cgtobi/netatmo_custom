@@ -644,6 +644,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
         self._current_start_anchor = datetime.now()
+        self._next_need_reset = False
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -657,6 +658,9 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         )
 
     def update_measures_num_calls(self):
+        if self._next_need_reset is True:
+            return 0
+
         return self._module.update_measures_num_calls()
     #to be called on the object itself
 
@@ -685,30 +689,43 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         else:
             return datetime(year=current.year, month=current.month, day=second_monday_day)
 
+    def _need_reset(self, current):
+        prev_anchor = self._current_start_anchor
+        curr_anchor = self._compute_current_anchor_point(current)
+        if self._current_start_anchor is not None and curr_anchor != self._current_start_anchor:
+            return True, prev_anchor, curr_anchor
+        return False, prev_anchor, curr_anchor
+
 
     async def async_update_energy(self, **kwargs):
 
-        end = datetime.now()
-        curr_anchor = self._compute_current_anchor_point(end)
-
-        #reset on the first measure of the monday with at minimum a difference of days of self._interval_delta
-        if self._current_start_anchor is None or curr_anchor != self._current_start_anchor:
-            # this is a reset as the pref one was going over the current day
+        if self._next_need_reset:
+            #value reset to 0 for a cycle vs what was asked before, next time we come here we will go in the next else
             self._module.reset_measures()
-            self._current_start_anchor = curr_anchor
+            self._next_need_reset = False
             # leave self._last_end so it is a "point" update, next time the measure will be done at the former last_end
             _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s new anchor: %s", self.name,
                           self._current_start_anchor)
             return 0
         else:
             end = datetime.now()
-            start = self._current_start_anchor #at start use the "boot" time of the integration as a first measure
+            need_reset, prev_anchor, self._current_start_anchor = self._need_reset(end)
+
+            if prev_anchor is not None and need_reset:
+                start = prev_anchor
+                end = self._current_start_anchor
+                self._next_need_reset = True
+                _LOGGER.debug("=====> TRUNCATE RESET ENERGY FOR RESET: truncate %s from anchor: %s to %s", self.name, prev_anchor, self._current_start_anchor)
+            else:
+                start = self._current_start_anchor #at start use the "boot" time of the integration as a first measure
+                self._next_need_reset = False
 
             end_time = int(end.timestamp())
             start_time = int(start.timestamp())
 
             num_calls =  await self._module.async_update_measures(start_time=start_time, end_time=end_time)
             # let the subsequent callback update the state energy data  and the availability
+
 
             return num_calls
 
