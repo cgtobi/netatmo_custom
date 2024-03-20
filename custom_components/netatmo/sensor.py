@@ -692,7 +692,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     def _need_reset(self, current):
         prev_anchor = self._current_start_anchor
         curr_anchor = self._compute_current_anchor_point(current)
-        if self._current_start_anchor is not None and curr_anchor != self._current_start_anchor:
+        if prev_anchor is not None and curr_anchor != prev_anchor:
             return True, prev_anchor, curr_anchor
         return False, prev_anchor, curr_anchor
 
