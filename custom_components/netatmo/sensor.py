@@ -644,8 +644,6 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
         self._current_start_anchor = datetime.now()
-        self._last_end = self._current_start_anchor
-        self._interval_delta = timedelta(days=18)
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -661,13 +659,43 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     def update_measures_num_calls(self):
         return self._module.update_measures_num_calls()
     #to be called on the object itself
+
+    #doing this allows to have a clen reboot of the system without loosing anything
+    def _compute_current_anchor_point(self, current):
+
+        #first monday of the month and third monday of the month
+        month_beg = datetime(current.year, current.month, 1) # + timedelta(hours=1)
+
+        #weekday() : from 0 (monday) to 6(sunday)
+        beg_day_in_week =  month_beg.weekday()
+        first_monday_day = 1
+        if beg_day_in_week > 0:
+            first_monday_day = 1 + (7 - month_beg.weekday())
+
+        if current.day < first_monday_day:
+            #we have to take the previous month
+            current  = current - timedelta(days=current.days + 1)
+            return self._compute_current_anchor_point(current)
+
+
+        second_monday_day = first_monday_day + 14
+
+        if current.day < second_monday_day:
+            return datetime(year=current.year, month=current.month, day=first_monday_day)
+        else:
+            return datetime(year=current.year, month=current.month, day=second_monday_day)
+
+
     async def async_update_energy(self, **kwargs):
 
+        end = datetime.now()
+        curr_anchor = self._compute_current_anchor_point(end)
+
         #reset on the first measure of the monday with at minimum a difference of days of self._interval_delta
-        if self._last_end - self._current_start_anchor >= self._interval_delta and self._last_end.weekday() == 0:
+        if self._current_start_anchor is None or curr_anchor != self._current_start_anchor:
             # this is a reset as the pref one was going over the current day
             self._module.reset_measures()
-            self._current_start_anchor = self._last_end
+            self._current_start_anchor = curr_anchor
             # leave self._last_end so it is a "point" update, next time the measure will be done at the former last_end
             _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s new anchor: %s", self.name,
                           self._current_start_anchor)
@@ -681,9 +709,6 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
             num_calls =  await self._module.async_update_measures(start_time=start_time, end_time=end_time)
             # let the subsequent callback update the state energy data  and the availability
-
-            #do that after the call only in case of success of the call (no exception)
-            self._last_end = end
 
             return num_calls
 
