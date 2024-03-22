@@ -643,7 +643,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
-        self._current_start_anchor = datetime.now()
+        self._current_start_anchor = None
         self._next_need_reset = False
     
     def complement_publishers(self, netatmo_device):
@@ -693,6 +693,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         prev_anchor = self._current_start_anchor
         curr_anchor = self._compute_current_anchor_point(current)
         if prev_anchor is not None and curr_anchor != prev_anchor:
+            _LOGGER.debug("=====> Need Reset is TRUE!!!!!: prev %s cur %s",
+                          prev_anchor, curr_anchor)
             return True, prev_anchor, curr_anchor
         return False, prev_anchor, curr_anchor
 
