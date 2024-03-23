@@ -8,6 +8,8 @@ from typing import cast, Any
 from datetime import datetime
 from datetime import timedelta
 
+from .pyatmo.const import MeasureInterval
+
 try:
     from . import pyatmo
 except:
@@ -725,7 +727,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             end_time = int(end.timestamp())
             start_time = int(start.timestamp())
 
-            num_calls =  await self._module.async_update_measures(start_time=start_time, end_time=end_time)
+            num_calls =  await self._module.async_update_measures(start_time=start_time, end_time=end_time, interval= MeasureInterval.HALF_HOUR)
             # let the subsequent callback update the state energy data  and the availability
 
 
