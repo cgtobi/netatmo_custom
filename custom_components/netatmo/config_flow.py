@@ -148,7 +148,7 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
             if len(homes) > 1:
                 l_homes = self.options.get(CONF_HOMES, {})
                 if len(l_homes) == 0:
-                    l_homes = homes
+                    l_homes = {hid for hid in homes}
                 schema = {
                     vol.Optional(
                         CONF_HOMES,
@@ -160,6 +160,9 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
                 schema = {}
         except:
             schema = {}
+
+
+
 
         schema.update({
             vol.Optional(
