@@ -672,6 +672,10 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     #doing this allows to have a clen reboot of the system without loosing anything
     def _compute_current_anchor_point(self, current):
 
+        #The monday stuff below are not working anymore : now energy for 30mn or 1h can be only probed for 2.5 days ...hence reset every days
+        return datetime(current.year, current.month, current.day)
+
+    def _OLD_compute_current_anchor_point(self, current):
         #first monday of the month and third monday of the month
         month_beg = datetime(current.year, current.month, 1) # + timedelta(hours=1)
 
