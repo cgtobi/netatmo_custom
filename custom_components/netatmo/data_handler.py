@@ -122,12 +122,12 @@ NETATMO_DEV_CALL_LIMITS = {
 
 
 DEFAULT_INTERVALS = {
-    ACCOUNT: 5400,
-    HOME: 300,
-    WEATHER: 300,
-    AIR_CARE: 150,
-    PUBLIC: 300,
-    EVENT: 300,
+    ACCOUNT: 10800,
+    HOME: 300, #from netatmo discussion it seems home data is updated every 5mn
+    WEATHER: 600,
+    AIR_CARE: 300,
+    PUBLIC: 600,
+    EVENT: 600,
     ENERGY_MEASURE: 2700
 }
 SCAN_INTERVAL = 60
@@ -202,7 +202,7 @@ class NetatmoPublisher:
         self._emissions.append(ts)
 
     def set_next_randomized_scan(self, ts, wait_time=0):
-        rand_delta = int(self.interval // 6)
+        rand_delta = int(self.interval // 8)
         rnd = random.randint(0-rand_delta, rand_delta)
         self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
 
