@@ -8,7 +8,10 @@ from typing import cast, Any
 from datetime import datetime
 from datetime import timedelta
 
-from .pyatmo.const import MeasureInterval
+try:
+    from .pyatmo.const import MeasureInterval
+except:
+    from pyatmo.const import MeasureInterval
 
 try:
     from . import pyatmo
