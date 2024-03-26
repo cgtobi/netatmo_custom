@@ -301,6 +301,7 @@ class PowerMixin(EntityBase):
 
         super().__init__(home, module)  # type: ignore # mypy issue 4335
         self.power: int | None = None
+        self.history_features.add("power")
 
 
 class EventMixin(EntityBase):
@@ -592,9 +593,15 @@ class EnergyHistoryMixin(EntityBase):
         self.sum_energy_elec: int | None = None
         self.sum_energy_elec_peak: int | None = None
         self.sum_energy_elec_off_peak: int | None = None
+        self.last_computed_start: int | None = None
+        self.last_computed_end: int | None = None
+        self.in_reset: bool| False = False
 
     def reset_measures(self):
+        self.in_reset = True
         self.historical_data = []
+        self.last_computed_start = None
+        self.last_computed_end = None
         self.sum_energy_elec = 0
         self.sum_energy_elec_peak = 0
         self.sum_energy_elec_off_peak = 0
@@ -801,10 +808,14 @@ class EnergyHistoryMixin(EntityBase):
         self.sum_energy_elec = 0
         self.sum_energy_elec_peak = 0
         self.sum_energy_elec_off_peak = 0
+        self.last_computed_start = start_time
+        self.last_computed_end = start_time  # no data at all : we know nothing for the end : best guess .. it is the start
+        self.in_reset = False
 
         if len(hist_good_vals) == 0:
-            #nothing has been updated or changed it can nearly be seen as an error, but teh api is answering correctly
+            #nothing has been updated or changed it can nearly be seen as an error, but the api is answering correctly
             #so we probably have to reset to 0 anyway as it means there were no exisitng historical data for this time range
+
             LOG.debug(
                 "=> NO VALUES energy update %s from: %s to %s,  prev_sum=%s",
                 self.name, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time),
@@ -862,6 +873,9 @@ class EnergyHistoryMixin(EntityBase):
                     self.name, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time),
                     datetime.fromtimestamp(computed_start), datetime.fromtimestamp(computed_end), self.sum_energy_elec,
                     prev_sum_energy_elec if prev_sum_energy_elec is not None else "NOTHING")
+
+            self.last_computed_start = computed_start
+            self.last_computed_end = computed_end
 
         return num_calls
 

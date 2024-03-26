@@ -7,6 +7,7 @@ import logging
 from typing import cast, Any
 from datetime import datetime
 from datetime import timedelta
+from time import time
 
 try:
     from .pyatmo.const import MeasureInterval
@@ -746,6 +747,43 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
         if (state := getattr(self._module, self.entity_description.key, None)) is None:
             return
+
+        try:
+            current = time()
+
+            if self._module.in_reset is False and self._module.last_computed_end is not None and self._module.last_computed_end < current:
+
+                power_data = self._module.get_history_data("power", from_ts=self._module.last_computed_end)
+
+                if len(power_data) > 1:
+                    #compute a rieman sum, as best as possible , trapezoidal, taking pessimistic asumption as we don't want to artifically go up the previous one (except in rare exceptions like reset, 0 , etc)
+                    delta_energy = 0
+                    for i in range(len(power_data) - 1):
+
+                        dt_h = float(power_data[i+1][0] - power_data[i][0])/3600.0
+
+                        dP_W = abs(float(power_data[i+1][1] - power_data[i][1]))
+
+                        dNrj_Wh = dt_h*( min(power_data[i+1][1], power_data[i][1]) + 0.5*dP_W)
+
+                        delta_energy += dNrj_Wh
+
+
+                    if delta_energy > 0:
+                        current_val = state
+                        new_val = state + delta_energy
+                        prev_energy = self._attr_native_value
+                        if prev_energy is not None and prev_energy > new_val:
+                            new_val = prev_energy
+                        state = new_val
+
+                        _LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s",
+                                      self.name, delta_energy, current_val, current_val + delta_energy, prev_energy, state)
+
+        except:
+            pass
+
+
 
         self._attr_available = True
         self._attr_native_value = state
