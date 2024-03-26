@@ -753,7 +753,12 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
             if self._module.in_reset is False and self._module.last_computed_end is not None and self._module.last_computed_end < current:
 
-                power_data = self._module.get_history_data("power", from_ts=self._module.last_computed_end)
+                if self._next_need_reset is True and self._current_start_anchor is not None:
+                    to_ts = int(self._current_start_anchor.timestamp())
+                else:
+                    to_ts = current
+
+                power_data = self._module.get_history_data("power", from_ts=self._module.last_computed_end, to_ts=to_ts)
 
                 if len(power_data) > 1:
                     #compute a rieman sum, as best as possible , trapezoidal, taking pessimistic asumption as we don't want to artifically go up the previous one (except in rare exceptions like reset, 0 , etc)
