@@ -641,6 +641,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     _last_end: datetime | None
     _last_start: datetime | None
     _current_start_anchor: datetime | None
+    _last_val_sent: float | None = None
 
     def __init__(
         self,
@@ -650,6 +651,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
         self._current_start_anchor = None
         self._next_need_reset = False
+        self._last_val_sent = None
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -747,10 +749,12 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         if (state := getattr(self._module, self.entity_description.key, None)) is None:
             return
 
-        try:
+        if self._module.in_reset is False:
+
+            delta_energy = 0
             current = time()
 
-            if self._module.in_reset is False and self._module.last_computed_end is not None and self._module.last_computed_end < current:
+            if self._module.last_computed_end is not None and self._module.last_computed_end < current:
 
                 if self._next_need_reset is True and self._current_start_anchor is not None:
                     to_ts = int(self._current_start_anchor.timestamp())
@@ -760,8 +764,9 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                 power_data = self._module.get_history_data("power", from_ts=self._module.last_computed_end, to_ts=to_ts)
 
                 if len(power_data) > 1:
+
                     #compute a rieman sum, as best as possible , trapezoidal, taking pessimistic asumption as we don't want to artifically go up the previous one (except in rare exceptions like reset, 0 , etc)
-                    delta_energy = 0
+
                     for i in range(len(power_data) - 1):
 
                         dt_h = float(power_data[i+1][0] - power_data[i][0])/3600.0
@@ -773,25 +778,20 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                         delta_energy += dNrj_Wh
 
 
-                    if delta_energy > 0:
-                        current_val = state
-                        new_val = state + delta_energy
-                        prev_energy = self._attr_native_value
-                        if prev_energy is not None and prev_energy > new_val:
-                            new_val = prev_energy
-                        state = new_val
+            current_val = state
+            new_val = state + delta_energy
+            prev_energy = self._last_val_sent
+            if prev_energy is not None and prev_energy > new_val:
+                new_val = prev_energy
+            state = new_val
 
-                        _LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s",
-                                      self.name, delta_energy, current_val, current_val + delta_energy, prev_energy, state)
-
-        except:
-            pass
-
-
+            if delta_energy > 0:
+                _LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s",
+                              self.name, delta_energy, current_val, current_val + delta_energy, prev_energy, state)
 
         self._attr_available = True
         self._attr_native_value = state
-
+        self._last_val_sent = state
         self.async_write_ha_state()
 
 
