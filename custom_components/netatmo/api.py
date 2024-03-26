@@ -8,7 +8,6 @@ try:
 except:
     import pyatmo
 
-
 from homeassistant.components import cloud
 from homeassistant.helpers import config_entry_oauth2_flow
 

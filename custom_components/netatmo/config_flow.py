@@ -24,7 +24,9 @@ from .const import (
     CONF_NEW_AREA,
     CONF_PUBLIC_MODE,
     CONF_WEATHER_AREAS,
-    DOMAIN, CONF_HOMES, DATA_HANDLER,
+    DOMAIN,
+    CONF_HOMES,
+    DATA_HANDLER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,7 +94,6 @@ class NetatmoFlowHandler(
         return await super().async_oauth_create_entry(data)
 
 
-
 class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Netatmo options."""
 
@@ -103,15 +104,9 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
         self.options.setdefault(CONF_WEATHER_AREAS, {})
         self.options.setdefault(CONF_HOMES, {})
 
-    @property
-    def logger(self) -> logging.Logger:
-        """Return logger."""
-        return logging.getLogger(__name__)
-
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         """Manage the Netatmo options."""
         return await self.async_step_public_weather_areas_and_homes()
-
 
     async def async_step_public_weather_areas_and_homes(
         self, user_input: dict | None = None
@@ -134,8 +129,6 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
             return self._create_options_entry()
 
         weather_areas = list(self.options[CONF_WEATHER_AREAS])
-
-
 
         try:
             homes = {}
@@ -160,9 +153,6 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
                 schema = {}
         except:
             schema = {}
-
-
-
 
         schema.update({
             vol.Optional(

@@ -53,7 +53,8 @@ from .const import (
     WEBHOOK_ACTIVATION,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
-    WEBHOOK_PUSH_TYPE, CONF_HOMES,
+    WEBHOOK_PUSH_TYPE,
+    CONF_HOMES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -570,7 +571,7 @@ class NetatmoDataHandler:
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
-            next_scan=time() + interval//2 + n*delta_scan, #at init time try to get some data
+            next_scan=time() + interval//8 + n*delta_scan, #at init time try to get some data
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],

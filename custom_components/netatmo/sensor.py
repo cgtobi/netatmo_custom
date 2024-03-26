@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 import logging
-from typing import cast, Any
+from typing import cast
 from datetime import datetime
 from datetime import timedelta
 from time import time
@@ -55,7 +55,6 @@ from .const import (
     CONF_URL_PUBLIC_WEATHER,
     CONF_URL_WEATHER,
     CONF_WEATHER_AREAS,
-    CONF_HOMES,
     DATA_HANDLER,
     DOMAIN,
     NETATMO_CREATE_BATTERY,
@@ -351,11 +350,11 @@ async def async_setup_entry(
         )
         async_add_entities(
             [
-            NetatmoSensor(netatmo_device, description)
-            for description in SENSOR_TYPES
-            if description.key in netatmo_device.device.features
-        ]
-            )
+                NetatmoSensor(netatmo_device, description)
+                for description in SENSOR_TYPES
+                if description.key in netatmo_device.device.features
+            ]
+        )
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_SENSOR, _create_sensor_entity)

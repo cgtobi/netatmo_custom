@@ -12,7 +12,6 @@ try:
 except:
     import pyatmo
 
-
 from homeassistant.components import cloud
 from homeassistant.components.webhook import (
     async_generate_url as webhook_generate_url,
@@ -48,7 +47,8 @@ from .const import (
     DOMAIN,
     PLATFORMS,
     WEBHOOK_DEACTIVATION,
-    WEBHOOK_PUSH_TYPE, CONF_HOMES,
+    WEBHOOK_PUSH_TYPE,
+    CONF_HOMES,
 )
 from .data_handler import NetatmoDataHandler
 from .webhook import async_handle_webhook
@@ -75,7 +75,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     _reset_hass_domain(hass)
 
     return True
-
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

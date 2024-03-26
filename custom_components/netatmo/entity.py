@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
-
 try:
     from .pyatmo import DeviceType
     from .pyatmo.modules.device_types import (
@@ -49,7 +47,6 @@ class NetatmoBaseEntity(Entity):
         """Entity created."""
         for publisher in self._publishers:
             signal_name = publisher[SIGNAL_NAME]
-
 
             if "target_module" in publisher:
                     await self.data_handler.subscribe_with_target(

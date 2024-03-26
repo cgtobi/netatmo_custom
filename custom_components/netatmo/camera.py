@@ -5,7 +5,6 @@ import logging
 from typing import Any, cast
 
 import aiohttp
-
 try:
     from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
     from .pyatmo.event import Event as NaEvent
