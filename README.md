@@ -23,7 +23,7 @@ In your netatmo account you may have multiple homes, all where supported and imp
 You can now select the homes you want to support in your homeassistant instance (some complex houses may have multiple legrand gateways, hence the need to select multiple covered homes)
 
 Once this integration is properly installed
-1. Go tot Settings > Devices & Services > Integrations Select the netatmo one (should have the HACS logo)
+1. Go to Settings > Devices & Services > Integrations Select the netatmo one (should have the HACS logo)
 2. Click Configure
 3. If you have multiple Homes, you should see a selector to select the homes to be covered
 4. Unfortunately you will have to manually delete the devices and entities not exposed anymore 
@@ -34,12 +34,18 @@ Once this integration is properly installed
 
 ### Adding Energy Entities!
 
-We had power entites before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now sensor.mydevice_energy_sum
+We had power entities before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now **sensor.mydevice_energy_sum** goinf straight form the netatmo API, and refined with some power measurement.
+
+
 There is also two helpers : 
-- sensor.netatmo_global_energy_sensor 
-- sensor.netatmo_global_energy_sensor_power_adapted
+- **sensor.netatmo_global_energy_sensor** 
+- **sensor.netatmo_global_energy_sensor_power_adapted**
 
 The first one is really the sum of the energy measures from Netatmo/Legrand, but this APIs being really updated every few hours from Netatmo/Legrand, the second one is introduced and estimates the current energy since the last API update with the power API (updated every 5mn)
-
+For those global sensor we do have also now a new option : the possibility to exclude some meter from those global sum, this is usefull in the case when one of your metter is a global house metter, and you want the global sum to represent only the sum of your loads. 
+As above: 
+1. Go to Settings > Devices & Services > Integrations Select the netatmo one (should have the HACS logo)
+2. Click Configure
+3. If you do have some meters they will appear here, select the oones you want to exclude from the global sensors above
 
 ### Probably some new bugs and some fixes too :)
