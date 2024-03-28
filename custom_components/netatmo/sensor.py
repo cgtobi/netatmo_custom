@@ -630,10 +630,16 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
     def async_update_callback(self) -> None:
         """Update the entity's state."""
 
+
+
         excluded_modules = self.data_handler.config_entry.options.get(CONF_EXCLUDED_METERS, [])
         state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted, excluded_modules=set(excluded_modules))
         if state is None:
             return
+
+        if self._last_val_sent is None:
+            #force to start at 0
+            state = 0
 
         if is_in_reset is False:
             new_val = state
