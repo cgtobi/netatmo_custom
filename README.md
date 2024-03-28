@@ -19,8 +19,8 @@ In order to use the custom component please follow the steps below:
 
 ### Multiple Homes coverage selection
 
-In you netatmo account you may have multiple homes, all where covered and imported in your homeassitant instance. 
-You can now select the ones you want to cover (some complex houses may have multiple legrand gateways, hence the need to select multiple covered homes)
+In your netatmo account you may have multiple homes, all where supported and imported in your homeassitant instance, and so all their devices and sensors. 
+You can now select the homes you want to support in your homeassistant instance (some complex houses may have multiple legrand gateways, hence the need to select multiple covered homes)
 
 Once this integration is properly installed
 1. Go tot Settings > Devices & Services > Integrations Select the netatmo one (should have the HACS logo)
@@ -34,8 +34,12 @@ Once this integration is properly installed
 
 ### Adding Energy Entities!
 
-We had power entites before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have sensor.mydevice_energy_sum
-Something to note : the first day measure you will get will be pretty high and wrong : normal, the energy measure are a sum, and the start is a few week before : so the energy dashboard, without any history wil think that the first day saw a big energy bump because it represents few weeks of consumption, but the day after should be correct.
+We had power entites before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now sensor.mydevice_energy_sum
+There is also two helpers : 
+- sensor.netatmo_global_energy_sensor 
+- sensor.netatmo_global_energy_sensor_power_adapted
+
+The first one is really the sum of the energy measures from Netatmo/Legrand, but this APIs being really updated every few hours from Netatmo/Legrand, the second one is introduced and estimates the current energy since the last API update with the power API (updated every 5mn)
 
 
 ### Probably some new bugs and some fixes too :)
