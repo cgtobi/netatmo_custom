@@ -62,6 +62,7 @@ CONF_NEW_AREA = "new_area"
 CONF_PUBLIC_MODE = "mode"
 CONF_WEATHER_AREAS = "weather_areas"
 CONF_HOMES = "selected_homes"
+CONF_EXCLUDED_METERS = "excluded_meters_in_sum"
 
 
 OAUTH2_AUTHORIZE = "https://api.netatmo.com/oauth2/authorize"

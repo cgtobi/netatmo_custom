@@ -41,11 +41,12 @@
       },
       "public_weather_areas_and_homes": {
         "data": {
-          "selected_homes": "Homes (leave all unchecked will import all of your homes))",
+          "selected_homes": "Homes (leave all unchecked will import all of your homes)",
+          "excluded_meters_in_sum": "select the meters you want to exclude form the global energy sensor",
           "new_area": "Area name",
           "weather_areas": "Weather areas"
         },
-        "description": "Define the homes you want support, Configure public weather sensors.",
+        "description": "Define the homes you want to support, Exclude meters from global sensor, Configure public weather sensors.",
         "title": "Home selection and [%key:component::netatmo::options::step::public_weather::title%]"
       }
     }

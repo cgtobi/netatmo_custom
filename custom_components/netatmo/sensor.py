@@ -63,7 +63,7 @@ from .const import (
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_WEATHER_SENSOR,
-    SIGNAL_NAME,
+    SIGNAL_NAME, CONF_EXCLUDED_METERS,
 )
 from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom, ENERGY_MEASURE, \
     AGGREGATE_ENERGY_MEASURE
@@ -626,7 +626,9 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted)
+
+        excluded_modules = self.data_handler.config_entry.options.get(CONF_EXCLUDED_METERS, [])
+        state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted, excluded_modules=set(excluded_modules))
         if state is None:
             return
 
