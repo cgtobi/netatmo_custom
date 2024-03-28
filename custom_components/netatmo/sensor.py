@@ -346,8 +346,9 @@ async def async_setup_entry(
             _LOGGER.debug(
                 "Adding energy aggregation sensor"
             )
-            entity = NetatmoAggregationEnergySensor(netatmo_data_handler)
-            async_add_entities([entity])
+            entity = NetatmoAggregationEnergySensor(netatmo_data_handler, power_adapted=True)
+            entity_2 = NetatmoAggregationEnergySensor(netatmo_data_handler, power_adapted=False)
+            async_add_entities([entity, entity_2])
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY_AGGREGATION, _create_energy_aggregation_entity)
@@ -595,22 +596,29 @@ class NetatmoClimateBatterySensor(NetatmoBaseEntity, SensorEntity):
 class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
 
     entity_description: NetatmoSensorEntityDescription
-    def __init__(self, data_handler: NetatmoDataHandler) -> None:
+    def __init__(self, data_handler: NetatmoDataHandler, power_adapted: bool) -> None:
         super().__init__(data_handler)
         self.entity_description = AGGREGATED_ENERGY_SENSOR_DESCRIPTION
         self._last_val_sent = None
+        self._power_adapted = power_adapted
 
-        self._attr_name = "Netatmo Global Energy Sensor"
-        self._attr_unique_id = (
-            "netatmo-global-energy-sensor"
-        )
+        if self._power_adapted:
+            self._attr_name = "Netatmo Global Energy Sensor Power Adapted"
+            self._attr_unique_id = (
+                "netatmo-global-energy-sensor-power-adapted"
+            )
+        else:
+            self._attr_name = "Netatmo Global Energy Sensor"
+            self._attr_unique_id = (
+                "netatmo-global-energy-sensor"
+            )
 
         self._publishers.extend(
             [
                 {
                     "name": AGGREGATE_ENERGY_MEASURE,
                     "data_handler": data_handler,
-                    SIGNAL_NAME: self._attr_unique_id,
+                    SIGNAL_NAME: "global-energy-sensors-signal",
                 },
             ]
         )
@@ -618,12 +626,12 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        state, is_in_reset = self.data_handler.account.get_current_energy_sum()
+        state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted)
         if state is None:
             return
 
         _LOGGER.debug(
-            "-------------- GLOBAL Aggregated Energy %s", state
+            "-------------- GLOBAL Aggregated Energy %s %s",self._power_adapted, state
         )
 
         if is_in_reset is False:
