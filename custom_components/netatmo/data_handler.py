@@ -47,6 +47,7 @@ from .const import (
     NETATMO_CREATE_SELECT,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_ENERGY,
+    NETATMO_CREATE_ENERGY_AGGREGATION,
     NETATMO_CREATE_SWITCH,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
@@ -67,6 +68,7 @@ AIR_CARE = "air_care"
 PUBLIC = NetatmoDeviceType.public
 EVENT = "event"
 ENERGY_MEASURE = "energy"
+AGGREGATE_ENERGY_MEASURE = "aggregate_energy"
 
 PUBLISHERS = {
     ACCOUNT: "async_update_topology",
@@ -75,12 +77,14 @@ PUBLISHERS = {
     AIR_CARE: "async_update_air_care",
     PUBLIC: "async_update_public_weather",
     EVENT: "async_update_events",
-    ENERGY_MEASURE: "async_update_energy"
+    ENERGY_MEASURE: "async_update_energy",
+    AGGREGATE_ENERGY_MEASURE: "async_update_aggregate_energy"
 }
 
 
 PUBLISHERS_CALL_PROBER = {
-    ENERGY_MEASURE: "update_measures_num_calls"
+    ENERGY_MEASURE: "update_measures_num_calls",
+    AGGREGATE_ENERGY_MEASURE: "update_aggregate_energy_num_calls"
 }
 
 #Netatmo rate limiting: https://dev.netatmo.com/guideline
@@ -127,7 +131,8 @@ DEFAULT_INTERVALS = {
     AIR_CARE: 300,
     PUBLIC: 600,
     EVENT: 600,
-    ENERGY_MEASURE: 2700
+    ENERGY_MEASURE: 2700,
+    AGGREGATE_ENERGY_MEASURE:60
 }
 SCAN_INTERVAL = 60
 
@@ -470,6 +475,11 @@ class NetatmoDataHandler:
                     self._last_cph_change = current
 
 
+    async def async_update_aggregate_energy(self):
+        return 0
+
+    def update_aggregate_energy_num_calls(self):
+        return 0
 
     @callback
     def async_force_update(self, signal_name: str) -> None:
@@ -564,14 +574,14 @@ class NetatmoDataHandler:
 
 
         interval = int(DEFAULT_INTERVALS[publisher] / self._interval_factor)
-        n = len(self._sorted_publisher)
+        #n = len(self._sorted_publisher)
         self.adjust_per_scan_numbers()
-        delta_scan = int(SCAN_INTERVAL//(max(self._min_call_per_interval, self._max_call_per_interval)//2 + 1))
+        #delta_scan = int(SCAN_INTERVAL//(max(self._min_call_per_interval, self._max_call_per_interval)//2 + 1))
 
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
-            next_scan=time() + interval//2 + n*delta_scan, #at init time try to get some data
+            next_scan=time() + interval//2, # + n*delta_scan, #at init time try to get some data
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
@@ -619,6 +629,13 @@ class NetatmoDataHandler:
         await self.subscribe(AIR_CARE, AIR_CARE, None)
 
         self.setup_air_care()
+
+        async_dispatcher_send(
+            self.hass,
+            NETATMO_CREATE_ENERGY_AGGREGATION,
+            self,
+        )
+
 
         for home in self.account.homes.values():
             signal_home = f"{HOME}-{home.entity_id}"

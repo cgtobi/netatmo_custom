@@ -59,14 +59,18 @@ from .const import (
     DOMAIN,
     NETATMO_CREATE_BATTERY,
     NETATMO_CREATE_ENERGY,
+    NETATMO_CREATE_ENERGY_AGGREGATION,
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_WEATHER_SENSOR,
     SIGNAL_NAME,
 )
-from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom, ENERGY_MEASURE
+from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom, ENERGY_MEASURE, \
+    AGGREGATE_ENERGY_MEASURE
 from .entity import NetatmoBaseEntity
 from .helper import NetatmoArea
+
+from homeassistant.helpers.device_registry import DeviceInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -293,6 +297,15 @@ ENERGY_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
     device_class=SensorDeviceClass.ENERGY,
 )
 
+AGGREGATED_ENERGY_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
+    key="global_sum_energy_elec",
+    name="Global Energy Sum",
+    netatmo_name="global_sum_energy_elec",
+    native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    device_class=SensorDeviceClass.ENERGY,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -325,6 +338,21 @@ async def async_setup_entry(
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY, _create_energy_entity)
     )
+
+
+    @callback
+    def _create_energy_aggregation_entity(netatmo_data_handler: NetatmoDataHandler) -> None:
+
+            _LOGGER.debug(
+                "Adding energy aggregation sensor"
+            )
+            entity = NetatmoAggregationEnergySensor(netatmo_data_handler)
+            async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY_AGGREGATION, _create_energy_aggregation_entity)
+    )
+
 
     @callback
     def _create_weather_sensor_entity(netatmo_device: NetatmoDevice) -> None:
@@ -564,6 +592,55 @@ class NetatmoClimateBatterySensor(NetatmoBaseEntity, SensorEntity):
         self._attr_available = True
         self._attr_native_value = self._module.battery
 
+class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
+
+    entity_description: NetatmoSensorEntityDescription
+    def __init__(self, data_handler: NetatmoDataHandler) -> None:
+        super().__init__(data_handler)
+        self.entity_description = AGGREGATED_ENERGY_SENSOR_DESCRIPTION
+
+        self._attr_name = "Netatmo Global Energy Sensor"
+        self._attr_unique_id = (
+            "netatmo-global-energy-sensor"
+        )
+
+        self._publishers.extend(
+            [
+                {
+                    "name": AGGREGATE_ENERGY_MEASURE,
+                    "data_handler": data_handler,
+                    SIGNAL_NAME: self._attr_unique_id,
+                },
+            ]
+        )
+
+    @callback
+    def async_update_callback(self) -> None:
+        """Update the entity's state."""
+        state = self.data_handler.account.get_current_energy_sum()
+        if state is None:
+            return
+
+        _LOGGER.debug(
+            "-------------- GLOBAL Aggregated Energy %s", state
+        )
+
+        self._attr_available = True
+        self._attr_native_value = state
+        self.async_write_ha_state()
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info for the sensor."""
+        manufacturer = "Legrand Group"
+        model = "Virtual Device to get energy sum"
+        return DeviceInfo(
+            configuration_url=self._config_url,
+            identifiers={(DOMAIN, self._id)},
+            name=self._device_name,
+            manufacturer=manufacturer,
+            model=model,
+        )
 
 class NetatmoBaseSensor(NetatmoBaseEntity, SensorEntity):
     """Implementation of a Netatmo sensor."""
@@ -746,40 +823,18 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     def async_update_callback(self) -> None:
         """Update the entity's state."""
 
-        if (state := getattr(self._module, self.entity_description.key, None)) is None:
+        if self._next_need_reset is True and self._current_start_anchor is not None:
+            to_ts = int(self._current_start_anchor.timestamp())
+        else:
+            to_ts = None
+
+        v, delta_energy = self._module.get_sum_energy_elec_power_adapted(to_ts=to_ts)
+
+        if v is None:
             return
 
         if self._module.in_reset is False:
-
-            delta_energy = 0
-            current = time()
-
-            if self._module.last_computed_end is not None and self._module.last_computed_end < current:
-
-                if self._next_need_reset is True and self._current_start_anchor is not None:
-                    to_ts = int(self._current_start_anchor.timestamp())
-                else:
-                    to_ts = current
-
-                power_data = self._module.get_history_data("power", from_ts=self._module.last_computed_end, to_ts=to_ts)
-
-                if len(power_data) > 1:
-
-                    #compute a rieman sum, as best as possible , trapezoidal, taking pessimistic asumption as we don't want to artifically go up the previous one (except in rare exceptions like reset, 0 , etc)
-
-                    for i in range(len(power_data) - 1):
-
-                        dt_h = float(power_data[i+1][0] - power_data[i][0])/3600.0
-
-                        dP_W = abs(float(power_data[i+1][1] - power_data[i][1]))
-
-                        dNrj_Wh = dt_h*( min(power_data[i+1][1], power_data[i][1]) + 0.5*dP_W)
-
-                        delta_energy += dNrj_Wh
-
-
-            current_val = state
-            new_val = state + delta_energy
+            new_val = v + delta_energy
             prev_energy = self._last_val_sent
             if prev_energy is not None and prev_energy > new_val:
                 new_val = prev_energy
@@ -787,7 +842,9 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
             if delta_energy > 0:
                 _LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s",
-                              self.name, delta_energy, current_val, current_val + delta_energy, prev_energy, state)
+                              self.name, delta_energy, v, v + delta_energy, prev_energy, state)
+        else:
+            state = v
 
         self._attr_available = True
         self._attr_native_value = state
