@@ -598,6 +598,7 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
     def __init__(self, data_handler: NetatmoDataHandler) -> None:
         super().__init__(data_handler)
         self.entity_description = AGGREGATED_ENERGY_SENSOR_DESCRIPTION
+        self._last_val_sent = None
 
         self._attr_name = "Netatmo Global Energy Sensor"
         self._attr_unique_id = (
@@ -617,7 +618,7 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        state = self.data_handler.account.get_current_energy_sum()
+        state, is_in_reset = self.data_handler.account.get_current_energy_sum()
         if state is None:
             return
 
@@ -625,8 +626,15 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
             "-------------- GLOBAL Aggregated Energy %s", state
         )
 
+        if is_in_reset is False:
+            new_val = state
+            if self._last_val_sent is not None and self._last_val_sent > new_val:
+                new_val = self._last_val_sent
+            state = new_val
+
         self._attr_available = True
         self._attr_native_value = state
+        self._last_val_sent = state
         self.async_write_ha_state()
 
     @property
