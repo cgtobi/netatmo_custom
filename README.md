@@ -36,7 +36,6 @@ Once this integration is properly installed
 
 We had power entities before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now **sensor.mydevice_energy_sum** goinf straight form the netatmo API, and refined with some power measurement.
 
-
 There is also two helpers : 
 - **sensor.netatmo_global_energy_sensor** 
 - **sensor.netatmo_global_energy_sensor_power_adapted**
@@ -49,3 +48,9 @@ As above:
 3. If you do have some meters they will appear here, select the oones you want to exclude from the global sensors above
 
 ### Probably some new bugs and some fixes too :)
+
+What may be better now:
+
+- Handling of API throttling is more exact we may have less lacunar data now, and better compliance with netatmo rate limites
+- The schdules : now are limited to temperature schedules
+- Some device that was not exposing power (and now energy) are now exposing it
