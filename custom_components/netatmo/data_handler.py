@@ -131,7 +131,7 @@ DEFAULT_INTERVALS = {
     AIR_CARE: 300,
     PUBLIC: 600,
     EVENT: 600,
-    ENERGY_MEASURE: 2700,
+    ENERGY_MEASURE: 1800,
     AGGREGATE_ENERGY_MEASURE:60
 }
 SCAN_INTERVAL = 60
@@ -206,9 +206,14 @@ class NetatmoPublisher:
         self._emissions.append(ts)
 
     def set_next_randomized_scan(self, ts, wait_time=0):
-        rand_delta = int(self.interval // 8)
-        rnd = random.randint(0-rand_delta, rand_delta)
-        self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
+
+        if getattr(self.target, "next_need_reset", False) is True:
+            #if there is a reset ask : met it assap and so short
+            self.next_scan = ts + max(wait_time, SCAN_INTERVAL)
+        else:
+            rand_delta = int(self.interval // 8)
+            rnd = random.randint(0-rand_delta, rand_delta)
+            self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
 
     def is_ts_allows_emission(self, ts):
         return self.next_scan < ts + max(SCAN_INTERVAL//2, self.interval//8)

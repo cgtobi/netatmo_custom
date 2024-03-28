@@ -9,10 +9,13 @@ from datetime import datetime
 from datetime import timedelta
 from time import time
 
+
 try:
     from .pyatmo.const import MeasureInterval
+    from .pyatmo.modules.module import EnergyHistoryMixin
 except:
     from pyatmo.const import MeasureInterval
+    from pyatmo.modules.module import EnergyHistoryMixin
 
 try:
     from . import pyatmo
@@ -632,10 +635,6 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
         if state is None:
             return
 
-        _LOGGER.debug(
-            "-------------- GLOBAL Aggregated Energy %s %s",self._power_adapted, state
-        )
-
         if is_in_reset is False:
             new_val = state
             if self._last_val_sent is not None and self._last_val_sent > new_val:
@@ -744,8 +743,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
-        self._current_start_anchor = None
-        self._next_need_reset = False
+        self._current_start_anchor = datetime.now()
+        self.next_need_reset = False
         self._last_val_sent = None
     
     def complement_publishers(self, netatmo_device):
@@ -760,7 +759,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         )
 
     def update_measures_num_calls(self):
-        if self._next_need_reset is True:
+        if self.next_need_reset is True:
             return 0
 
         return self._module.update_measures_num_calls()
@@ -795,38 +794,31 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         else:
             return datetime(year=current.year, month=current.month, day=second_monday_day)
 
-    def _need_reset(self, current):
-        prev_anchor = self._current_start_anchor
-        curr_anchor = self._compute_current_anchor_point(current)
-        if prev_anchor is not None and curr_anchor != prev_anchor:
-            _LOGGER.debug("=====> Need Reset is TRUE!!!!!: prev %s cur %s",
-                          prev_anchor, curr_anchor)
-            return True, prev_anchor, curr_anchor
-        return False, prev_anchor, curr_anchor
-
-
     async def async_update_energy(self, **kwargs):
 
-        if self._next_need_reset:
+        if isinstance(self._module, EnergyHistoryMixin) is False:
+            return 0
+
+        if self.next_need_reset:
             #value reset to 0 for a cycle vs what was asked before, next time we come here we will go in the next else
             self._module.reset_measures()
-            self._next_need_reset = False
+            self.next_need_reset = False
             # leave self._last_end so it is a "point" update, next time the measure will be done at the former last_end
             _LOGGER.debug("=====> RESET ENERGY: forcing reset of %s new anchor: %s", self.name,
                           self._current_start_anchor)
             return 0
         else:
             end = datetime.now()
-            need_reset, prev_anchor, self._current_start_anchor = self._need_reset(end)
+            start = self._current_start_anchor
 
-            if prev_anchor is not None and need_reset:
-                start = prev_anchor
+            self.next_need_reset = False
+            if end.day != start.day:
+                self.next_need_reset = True
+
+            if self.next_need_reset:
+                self._current_start_anchor = self._compute_current_anchor_point(end) #compute the next possible start properly
                 end = self._current_start_anchor
-                self._next_need_reset = True
-                _LOGGER.debug("=====> TRUNCATE RESET ENERGY FOR RESET: truncate %s from anchor: %s to %s", self.name, prev_anchor, self._current_start_anchor)
-            else:
-                start = self._current_start_anchor #at start use the "boot" time of the integration as a first measure
-                self._next_need_reset = False
+                _LOGGER.debug("=====> TRUNCATE RESET ENERGY FOR RESET: truncate %s from anchor: %s to %s", self.name, start, end)
 
             end_time = int(end.timestamp())
             start_time = int(start.timestamp())
@@ -841,7 +833,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     def async_update_callback(self) -> None:
         """Update the entity's state."""
 
-        if self._next_need_reset is True and self._current_start_anchor is not None:
+        if self.next_need_reset is True and self._current_start_anchor is not None:
             to_ts = int(self._current_start_anchor.timestamp())
         else:
             to_ts = None
