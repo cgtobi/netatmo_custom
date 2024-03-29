@@ -7,19 +7,14 @@ import logging
 from typing import cast
 from datetime import datetime
 from datetime import timedelta
-from time import time
-
 
 try:
     from .pyatmo.const import MeasureInterval
     from .pyatmo.modules.module import EnergyHistoryMixin
-except:
+    from . import pyatmo
+except Exception:
     from pyatmo.const import MeasureInterval
     from pyatmo.modules.module import EnergyHistoryMixin
-
-try:
-    from . import pyatmo
-except:
     import pyatmo
 
 from homeassistant.components.sensor import (
@@ -342,21 +337,19 @@ async def async_setup_entry(
         async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY, _create_energy_entity)
     )
 
-
     @callback
     def _create_energy_aggregation_entity(netatmo_data_handler: NetatmoDataHandler) -> None:
 
-            _LOGGER.debug(
-                "Adding energy aggregation sensor"
-            )
-            entity = NetatmoAggregationEnergySensor(netatmo_data_handler, power_adapted=True)
-            entity_2 = NetatmoAggregationEnergySensor(netatmo_data_handler, power_adapted=False)
-            async_add_entities([entity, entity_2])
+        _LOGGER.debug(
+            "Adding energy aggregation sensor"
+        )
+        entity = NetatmoAggregationEnergySensor(netatmo_data_handler, power_adapted=True)
+        entity_2 = NetatmoAggregationEnergySensor(netatmo_data_handler, power_adapted=False)
+        async_add_entities([entity, entity_2])
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY_AGGREGATION, _create_energy_aggregation_entity)
     )
-
 
     @callback
     def _create_weather_sensor_entity(netatmo_device: NetatmoDevice) -> None:
@@ -522,11 +515,10 @@ class NetatmoWeatherSensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        if (
-            not self._module.reachable
-            or (state := getattr(self._module, self.entity_description.netatmo_name))
-            is None
-        ):
+
+        state = getattr(self._module, self.entity_description.netatmo_name)
+
+        if state is None or not self._module.reachable:
             if self.available:
                 self._attr_available = False
             return
@@ -596,9 +588,11 @@ class NetatmoClimateBatterySensor(NetatmoBaseEntity, SensorEntity):
         self._attr_available = True
         self._attr_native_value = self._module.battery
 
+
 class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
 
     entity_description: NetatmoSensorEntityDescription
+
     def __init__(self, data_handler: NetatmoDataHandler, power_adapted: bool) -> None:
         super().__init__(data_handler)
         self.entity_description = AGGREGATED_ENERGY_SENSOR_DESCRIPTION
@@ -630,15 +624,14 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
     def async_update_callback(self) -> None:
         """Update the entity's state."""
 
-
-
         excluded_modules = self.data_handler.config_entry.options.get(CONF_EXCLUDED_METERS, [])
-        state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted, excluded_modules=set(excluded_modules))
+        state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted,
+                                                                              excluded_modules=set(excluded_modules))
         if state is None:
             return
 
         if self._last_val_sent is None:
-            #force to start at 0
+            # force to start at 0 for homeassitant energy dashboard continuity calculus
             state = 0
 
         if is_in_reset is False:
@@ -664,6 +657,7 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
             manufacturer=manufacturer,
             model=model,
         )
+
 
 class NetatmoBaseSensor(NetatmoBaseEntity, SensorEntity):
     """Implementation of a Netatmo sensor."""
@@ -717,9 +711,8 @@ class NetatmoBaseSensor(NetatmoBaseEntity, SensorEntity):
 
         self._attr_available = True
         self._attr_native_value = state
-
-
         self.async_write_ha_state()
+
 
 class NetatmoSensor(NetatmoBaseSensor):
     """Implementation of a generic Netatmo sensor."""
@@ -734,6 +727,7 @@ class NetatmoSensor(NetatmoBaseSensor):
                 },
             ]
         )
+
 
 class NetatmoEnergySensor(NetatmoBaseSensor):
     """Implementation of an energy Netatmo sensor."""
@@ -768,30 +762,33 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         if self.next_need_reset is True:
             return 0
 
-        return self._module.update_measures_num_calls()
-    #to be called on the object itself
+        if isinstance(self._module, EnergyHistoryMixin):
+            return self._module.update_measures_num_calls()
 
-    #doing this allows to have a clen reboot of the system without loosing anything
+        return 1
+    # to be called on the object itself
+
+    # doing this allows to have a clen reboot of the system without loosing anything
     def _compute_current_anchor_point(self, current):
 
-        #The monday stuff below are not working anymore : now energy for 30mn or 1h can be only probed for 2.5 days ...hence reset every days
+        # The monday stuff below are not working anymore : now energy for 30mn or 1h
+        # can be only probed for 2.5 days ...hence reset every days
         return datetime(current.year, current.month, current.day)
 
-    def _OLD_compute_current_anchor_point(self, current):
-        #first monday of the month and third monday of the month
-        month_beg = datetime(current.year, current.month, 1) # + timedelta(hours=1)
+    def _old_compute_current_anchor_point(self, current):
+        # first monday of the month and third monday of the month
+        month_beg = datetime(current.year, current.month, 1)  # + timedelta(hours=1)
 
-        #weekday() : from 0 (monday) to 6(sunday)
-        beg_day_in_week =  month_beg.weekday()
+        # weekday() : from 0 (monday) to 6(sunday)
+        beg_day_in_week = month_beg.weekday()
         first_monday_day = 1
         if beg_day_in_week > 0:
             first_monday_day = 1 + (7 - month_beg.weekday())
 
         if current.day < first_monday_day:
-            #we have to take the previous month
-            current  = current - timedelta(days=current.days + 1)
-            return self._compute_current_anchor_point(current)
-
+            # we have to take the previous month
+            current = current - timedelta(days=current.days + 1)
+            return self._old_compute_current_anchor_point(current)
 
         second_monday_day = first_monday_day + 14
 
@@ -806,7 +803,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             return 0
 
         if self.next_need_reset:
-            #value reset to 0 for a cycle vs what was asked before, next time we come here we will go in the next else
+            # value reset to 0 for a cycle vs what was asked before, next time we come here we will go in the next else
             self._module.reset_measures()
             self.next_need_reset = False
             # leave self._last_end so it is a "point" update, next time the measure will be done at the former last_end
@@ -822,17 +819,19 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                 self.next_need_reset = True
 
             if self.next_need_reset:
-                self._current_start_anchor = self._compute_current_anchor_point(end) #compute the next possible start properly
+                # compute the next possible start properly
+                self._current_start_anchor = self._compute_current_anchor_point(end)
                 end = self._current_start_anchor
-                _LOGGER.debug("=====> TRUNCATE RESET ENERGY FOR RESET: truncate %s from anchor: %s to %s", self.name, start, end)
+                _LOGGER.debug("TRUNCATE RESET ENERGY FOR RESET: truncate %s from anchor: %s to %s",
+                              self.name, start, end)
 
             end_time = int(end.timestamp())
             start_time = int(start.timestamp())
 
-            num_calls =  await self._module.async_update_measures(start_time=start_time, end_time=end_time, interval= MeasureInterval.HALF_HOUR)
+            num_calls = await self._module.async_update_measures(start_time=start_time,
+                                                                 end_time=end_time,
+                                                                 interval=MeasureInterval.HALF_HOUR)
             # let the subsequent callback update the state energy data  and the availability
-
-
             return num_calls
 
     @callback
@@ -844,7 +843,11 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         else:
             to_ts = None
 
-        v, delta_energy = self._module.get_sum_energy_elec_power_adapted(to_ts=to_ts)
+        if isinstance(self._module, EnergyHistoryMixin):
+            v, delta_energy = self._module.get_sum_energy_elec_power_adapted(to_ts=to_ts)
+        else:
+            v = None
+            delta_energy = 0
 
         if v is None:
             return

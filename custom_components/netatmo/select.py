@@ -5,7 +5,7 @@ import logging
 
 try:
     from .pyatmo import DeviceType
-except:
+except Exception:
     from pyatmo import DeviceType
 
 from homeassistant.components.select import SelectEntity

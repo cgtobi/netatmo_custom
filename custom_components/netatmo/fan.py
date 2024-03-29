@@ -6,7 +6,7 @@ from typing import Final, cast
 
 try:
     from .pyatmo import modules as NaModules
-except:
+except Exception:
     from pyatmo import modules as NaModules
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature

@@ -8,7 +8,7 @@ import aiohttp
 try:
     from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
     from .pyatmo.event import Event as NaEvent
-except:
+except Exception:
     from pyatmo import ApiError as NetatmoApiError, modules as NaModules
     from pyatmo.event import Event as NaEvent
 

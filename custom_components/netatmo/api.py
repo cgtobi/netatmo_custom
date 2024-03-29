@@ -5,7 +5,7 @@ from typing import cast
 from aiohttp import ClientSession
 try:
     from . import pyatmo
-except:
+except Exception:
     import pyatmo
 
 from homeassistant.components import cloud

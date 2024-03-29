@@ -9,7 +9,7 @@ try:
         DEVICE_DESCRIPTION_MAP,
         DeviceType as NetatmoDeviceType,
     )
-except:
+except Exception:
     from pyatmo import DeviceType
     from pyatmo.modules.device_types import (
         DEVICE_DESCRIPTION_MAP,
@@ -37,7 +37,7 @@ class NetatmoBaseEntity(Entity):
 
         self._device_name: str = ""
         self._id: str = ""
-        self._model: DeviceType
+        self._model: DeviceType = NetatmoDeviceType.NLunknown
         self._config_url: str | None = None
         self._attr_name = None
         self._attr_unique_id = None
@@ -49,7 +49,7 @@ class NetatmoBaseEntity(Entity):
             signal_name = publisher[SIGNAL_NAME]
 
             if "target_module" in publisher:
-                    await self.data_handler.subscribe_with_target(
+                await self.data_handler.subscribe_with_target(
                     publisher=publisher["name"],
                     signal_name=signal_name,
                     target=publisher["target_module"],

@@ -34,7 +34,7 @@ try:
     from .pyatmo.modules.device_types import (
         DeviceCategory
     )
-except:
+except Exception:
 
     from pyatmo.modules.device_types import (
         DeviceCategory
@@ -144,62 +144,59 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
 
         schema = {}
 
-        if True:
-            try:
-                homes = {}
+        try:
+            homes = {}
 
-                acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes
+            acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes
 
-                for home_id, home in acc_homes.items():
-                    homes[home.entity_id] = home.name
+            for home_id, home in acc_homes.items():
+                homes[home.entity_id] = home.name
 
-                if len(homes) > 1:
-                    l_homes = self.options.get(CONF_HOMES, [])
-                    if len(l_homes) == 0:
-                        l_homes = [hid for hid in homes]
+            if len(homes) > 1:
+                l_homes = self.options.get(CONF_HOMES, [])
+                if len(l_homes) == 0:
+                    l_homes = [hid for hid in homes]
+                schema.update({
+                    vol.Optional(
+                        CONF_HOMES,
+                        default=l_homes,
+                    ): cv.multi_select(homes),
+
+                })
+
+        except Exception:
+            pass
+
+        try:
+
+            acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.homes
+
+            meters = {}
+
+            for home_id, home in acc_homes.items():
+                for m_id, module in home.modules.items():
+                    if module.device_category == DeviceCategory.meter:
+                        meters[m_id] = module.name
+
+            if len(meters) > 0:
+
+                l_meters = self.options.get(CONF_EXCLUDED_METERS, [])
+                if len(l_meters) > 0:
                     schema.update({
                         vol.Optional(
-                            CONF_HOMES,
-                            default=l_homes,
-                        ): cv.multi_select(homes),
-
+                            CONF_EXCLUDED_METERS,
+                            default=l_meters,
+                        ): cv.multi_select(meters),
+                    })
+                else:
+                    schema.update({
+                        vol.Optional(
+                            CONF_EXCLUDED_METERS,
+                        ): cv.multi_select(meters),
                     })
 
-            except:
-                pass
-
-
-            try:
-
-                acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.homes
-
-                meters = {}
-
-                for home_id, home in acc_homes.items():
-                    for m_id, module in home.modules.items():
-                        if module.device_category == DeviceCategory.meter:
-                            meters[m_id] = module.name
-
-                if len(meters) > 0:
-
-                    l_meters = self.options.get(CONF_EXCLUDED_METERS, [])
-                    if len(l_meters) > 0:
-                        schema.update({
-                            vol.Optional(
-                                CONF_EXCLUDED_METERS,
-                                default=l_meters,
-                            ): cv.multi_select(meters),
-                        })
-                    else:
-                        schema.update({
-                            vol.Optional(
-                                CONF_EXCLUDED_METERS,
-                            ): cv.multi_select(meters),
-                        })
-
-            except:
-                pass
-
+        except Exception:
+            pass
 
         schema.update({
             vol.Optional(
@@ -232,17 +229,24 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
 
             return await self.async_step_public_weather_areas_and_homes()
 
-        orig_options = self.config_entry.options.get(CONF_WEATHER_AREAS, {}).get(
-            user_input[CONF_NEW_AREA], {}
-        )
+        if user_input is not None and CONF_NEW_AREA in user_input:
+            orig_options = self.config_entry.options.get(CONF_WEATHER_AREAS, {}).get(
+                user_input[CONF_NEW_AREA], {})
+            schema = {
+                vol.Optional(CONF_AREA_NAME, default=user_input[CONF_NEW_AREA]): str,
+            }
+        else:
+            orig_options = {}
+            schema = {
+                vol.Optional(CONF_AREA_NAME): str,
+            }
 
         default_longitude = self.hass.config.longitude
         default_latitude = self.hass.config.latitude
         default_size = 0.04
 
-        data_schema = vol.Schema(
+        schema.update(
             {
-                vol.Optional(CONF_AREA_NAME, default=user_input[CONF_NEW_AREA]): str,
                 vol.Optional(
                     CONF_LAT_NE,
                     default=orig_options.get(
@@ -277,6 +281,8 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
                 ): bool,
             }
         )
+
+        data_schema = vol.Schema(schema)
 
         return self.async_show_form(step_id="public_weather", data_schema=data_schema)
 

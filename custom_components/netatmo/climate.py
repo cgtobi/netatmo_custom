@@ -7,7 +7,7 @@ from typing import Any, cast
 try:
     from .pyatmo.modules import NATherm1
     from .pyatmo.modules.device_types import DeviceType
-except:
+except Exception:
     from pyatmo.modules import NATherm1
     from pyatmo.modules.device_types import DeviceType
 

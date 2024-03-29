@@ -9,7 +9,7 @@ from typing import Any
 import aiohttp
 try:
     from . import pyatmo
-except:
+except Exception:
     import pyatmo
 
 from homeassistant.components import cloud
@@ -59,6 +59,7 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 MAX_WEBHOOK_RETRIES = 3
+
 
 def _reset_hass_domain(hass: HomeAssistant):
     hass.data[DOMAIN][DATA_PERSONS] = {}
@@ -117,9 +118,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     }
 
-    data_handler = NetatmoDataHandler(hass, entry)
-    hass.data[DOMAIN][entry.entry_id][DATA_HANDLER] = data_handler
-    await data_handler.async_setup()
+    local_data_handler = NetatmoDataHandler(hass, entry)
+    hass.data[DOMAIN][entry.entry_id][DATA_HANDLER] = local_data_handler
+    await local_data_handler.async_setup()
 
     async def unregister_webhook(
         _: Any,
@@ -219,9 +220,9 @@ async def async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry) 
 async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle signals of config entry being updated."""
 
-    data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
+    local_data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    account_home = data_handler.account.all_account_homes
+    account_home = local_data_handler.account.all_account_homes
 
     do_reload = False
     homes = {}
@@ -229,9 +230,9 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
 
         homes = entry.options.get(CONF_HOMES, {})
 
-        init = set(data_handler.account.support_only_homes)
-        data_handler.account.update_supported_homes(support_only_homes=[h_id for h_id in homes])
-        if init != set(data_handler.account.support_only_homes):
+        init = set(local_data_handler.account.support_only_homes)
+        local_data_handler.account.update_supported_homes(support_only_homes=[h_id for h_id in homes])
+        if init != set(local_data_handler.account.support_only_homes):
             do_reload = True
 
     if do_reload is False:
@@ -275,7 +276,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         except cloud.CloudNotAvailable:
             pass
 
-#allows to manually delete devices not exposed anymore
+
+# allows to manually delete devices not exposed anymore
 async def async_remove_config_entry_device(
     hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
 ) -> bool:
