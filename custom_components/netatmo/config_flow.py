@@ -206,8 +206,6 @@ class NetatmoOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional(CONF_NEW_AREA): str,
         })
 
-        _LOGGER.debug("=====<<<<>>>>>> SCHEMA ! %s", schema)
-
         data_schema = vol.Schema(schema)
 
         return self.async_show_form(
