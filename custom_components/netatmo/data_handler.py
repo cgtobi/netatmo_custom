@@ -127,7 +127,7 @@ NETATMO_DEV_CALL_LIMITS = {
 
 DEFAULT_INTERVALS = {
     ACCOUNT: 10800,
-    HOME: 300,  # from netatmo discussion it seems home data is updated every 5mn
+    HOME: 150,  # from netatmo discussion it seems home data is updated every 5mn, put half of it here
     WEATHER: 600,
     AIR_CARE: 300,
     PUBLIC: 600,
