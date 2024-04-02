@@ -59,6 +59,11 @@ from .const import (
     CONF_HOMES,
 )
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .sensor import NetatmoEnergySensor
+
+
 _LOGGER = logging.getLogger(__name__)
 
 SIGNAL_NAME = "signal_name"
@@ -235,6 +240,9 @@ class NetatmoDataHandler:
         self.publisher: dict[str, NetatmoPublisher] = {}
         self._sorted_publisher: list[NetatmoPublisher] = []
         self._webhook: bool = False
+
+        self.energy_sensors: list[NetatmoEnergySensor] | None = []
+
         if config_entry.data["auth_implementation"] == cloud.DOMAIN:
             limits = NETATMO_USER_CALL_LIMITS
         else:

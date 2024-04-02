@@ -627,6 +627,12 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
         excluded_modules = self.data_handler.config_entry.options.get(CONF_EXCLUDED_METERS, [])
         state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted,
                                                                               excluded_modules=set(excluded_modules))
+
+        #update all energy sensor with the current new power data
+        for nrj_sensor in self.data_handler.energy_sensors:
+            nrj_sensor.async_update_callback()
+
+
         if state is None:
             return
 
@@ -746,6 +752,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         self._current_start_anchor = datetime.now()
         self.next_need_reset = False
         self._last_val_sent = None
+        self.data_handler.energy_sensors.append(self)
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
