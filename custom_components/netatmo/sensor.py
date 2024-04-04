@@ -1,4 +1,5 @@
 """Support for the Netatmo sensors."""
+
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -6,7 +7,6 @@ from dataclasses import dataclass
 import logging
 from typing import cast
 from datetime import datetime
-from datetime import timedelta
 
 try:
     from .pyatmo.const import MeasureInterval
@@ -86,16 +86,11 @@ SUPPORTED_PUBLIC_SENSOR_TYPES: tuple[str, ...] = (
 )
 
 
-@dataclass(frozen=True)
-class NetatmoRequiredKeysMixin:
-    """Mixin for required keys."""
+@dataclass(frozen=True, kw_only=True)
+class NetatmoSensorEntityDescription(SensorEntityDescription):
+    """Describes Netatmo sensor entity."""
 
     netatmo_name: str
-
-
-@dataclass(frozen=True)
-class NetatmoSensorEntityDescription(SensorEntityDescription, NetatmoRequiredKeysMixin):
-    """Describes Netatmo sensor entity."""
 
 
 SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
@@ -515,10 +510,11 @@ class NetatmoWeatherSensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-
-        state = getattr(self._module, self.entity_description.netatmo_name)
-
-        if state is None or not self._module.reachable:
+        if (
+            not self._module.reachable
+            or (state := getattr(self._module, self.entity_description.netatmo_name))
+            is None
+        ):
             if self.available:
                 self._attr_available = False
             return
@@ -779,31 +775,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     # doing this allows to have a clen reboot of the system without loosing anything
     def _compute_current_anchor_point(self, current):
 
-        # The monday stuff below are not working anymore : now energy for 30mn or 1h
-        # can be only probed for 2.5 days ...hence reset every days
+        # now energy for 30mn or 1h can be only probed for 2.5 days ...hence reset every days
         return datetime(current.year, current.month, current.day)
-
-    def _old_compute_current_anchor_point(self, current):
-        # first monday of the month and third monday of the month
-        month_beg = datetime(current.year, current.month, 1)  # + timedelta(hours=1)
-
-        # weekday() : from 0 (monday) to 6(sunday)
-        beg_day_in_week = month_beg.weekday()
-        first_monday_day = 1
-        if beg_day_in_week > 0:
-            first_monday_day = 1 + (7 - month_beg.weekday())
-
-        if current.day < first_monday_day:
-            # we have to take the previous month
-            current = current - timedelta(days=current.days + 1)
-            return self._old_compute_current_anchor_point(current)
-
-        second_monday_day = first_monday_day + 14
-
-        if current.day < second_monday_day:
-            return datetime(year=current.year, month=current.month, day=first_monday_day)
-        else:
-            return datetime(year=current.year, month=current.month, day=second_monday_day)
 
     async def async_update_energy(self, **kwargs):
 
