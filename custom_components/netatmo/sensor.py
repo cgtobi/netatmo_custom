@@ -623,7 +623,8 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
         excluded_modules = self.data_handler.config_entry.options.get(CONF_EXCLUDED_METERS, [])
         state, is_in_reset = self.data_handler.account.get_current_energy_sum(power_adapted=self._power_adapted,
                                                                               excluded_modules=set(excluded_modules),
-                                                                              ok_if_none=True)
+                                                                              ok_if_none=True,
+                                                                              conservative=True)
 
         #update all energy sensor with the current new power data
         for nrj_sensor in self.data_handler.energy_sensors:
@@ -825,7 +826,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             to_ts = None
 
         if isinstance(self._module, EnergyHistoryMixin):
-            v, delta_energy = self._module.get_sum_energy_elec_power_adapted(to_ts=to_ts)
+            v, delta_energy = self._module.get_sum_energy_elec_power_adapted(to_ts=to_ts, conservative=True)
         else:
             v = None
             delta_energy = 0
