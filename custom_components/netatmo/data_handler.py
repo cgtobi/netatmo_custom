@@ -315,7 +315,7 @@ class NetatmoDataHandler:
                 if has_error is False:
                     break
 
-                await asyncio.sleep(20)
+                await asyncio.sleep(5)
 
         self.add_api_call(num_calls)
 
