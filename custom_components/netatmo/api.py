@@ -6,7 +6,7 @@ from typing import cast
 from aiohttp import ClientSession
 try:
     from . import pyatmo
-except Exception:
+except Exception:  # pylint: disable=broad-except
     import pyatmo
 
 from homeassistant.components import cloud

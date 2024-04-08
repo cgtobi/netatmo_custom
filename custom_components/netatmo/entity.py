@@ -10,7 +10,7 @@ try:
         DEVICE_DESCRIPTION_MAP,
         DeviceType as NetatmoDeviceType,
     )
-except Exception:
+except Exception:  # pylint: disable=broad-except
     from pyatmo import DeviceType
     from pyatmo.modules.device_types import (
         DEVICE_DESCRIPTION_MAP,

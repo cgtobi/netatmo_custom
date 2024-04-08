@@ -7,7 +7,7 @@ from typing import Final, cast
 
 try:
     from .pyatmo import modules as NaModules
-except Exception:
+except Exception:  # pylint: disable=broad-except
     from pyatmo import modules as NaModules
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature

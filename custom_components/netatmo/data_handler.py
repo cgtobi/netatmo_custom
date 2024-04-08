@@ -16,7 +16,7 @@ try:
         DeviceCategory as NetatmoDeviceCategory,
         DeviceType as NetatmoDeviceType,
     )
-except Exception:
+except Exception:  # pylint: disable=broad-except
     import pyatmo
     from pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
@@ -558,7 +558,7 @@ class NetatmoDataHandler:
 
             try:
                 num_fetch = int(num_fetch)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 num_fetch = 1
 
             self.add_api_call(num_fetch)

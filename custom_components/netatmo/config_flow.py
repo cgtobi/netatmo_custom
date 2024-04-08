@@ -39,7 +39,7 @@ try:
     from .pyatmo.modules.device_types import (
         DeviceCategory
     )
-except Exception:
+except Exception:  # pylint: disable=broad-except
 
     from pyatmo.modules.device_types import (
         DeviceCategory
@@ -168,7 +168,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
 
                 })
 
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass
 
         try:
@@ -199,7 +199,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
                         ): cv.multi_select(meters),
                     })
 
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass
 
         schema.update({
@@ -231,9 +231,14 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
 
             return await self.async_step_public_weather_areas_and_homes()
 
-        orig_options = self.config_entry.options.get(CONF_WEATHER_AREAS, {}).get(
-            user_input[CONF_NEW_AREA], {}
-        )
+        if user_input is None:
+            orig_options = {}
+            default_new_area = None
+        else:
+            default_new_area = user_input[CONF_NEW_AREA]
+            orig_options = self.config_entry.options.get(CONF_WEATHER_AREAS, {}).get(
+                default_new_area, {}
+            )
 
         default_longitude = self.hass.config.longitude
         default_latitude = self.hass.config.latitude
@@ -241,7 +246,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
 
         data_schema = vol.Schema(
             {
-                vol.Optional(CONF_AREA_NAME, default=user_input[CONF_NEW_AREA]): str,
+                vol.Optional(CONF_AREA_NAME, default=default_new_area): str,
                 vol.Optional(
                     CONF_LAT_NE,
                     default=orig_options.get(

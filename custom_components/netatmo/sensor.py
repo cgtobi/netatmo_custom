@@ -12,7 +12,7 @@ try:
     from .pyatmo.const import MeasureInterval
     from .pyatmo.modules.module import EnergyHistoryMixin
     from . import pyatmo
-except Exception:
+except Exception:  # pylint: disable=broad-except
     from pyatmo.const import MeasureInterval
     from pyatmo.modules.module import EnergyHistoryMixin
     import pyatmo
@@ -510,10 +510,13 @@ class NetatmoWeatherSensor(NetatmoBaseEntity, SensorEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
+        state = None
+        if self._module.reachable:
+            state = getattr(self._module, self.entity_description.netatmo_name)
+
         if (
             not self._module.reachable
-            or (state := getattr(self._module, self.entity_description.netatmo_name))
-            is None
+            or state is None
         ):
             if self.available:
                 self._attr_available = False
@@ -626,10 +629,9 @@ class NetatmoAggregationEnergySensor(NetatmoBaseEntity, SensorEntity):
                                                                               ok_if_none=True,
                                                                               conservative=True)
 
-        #update all energy sensor with the current new power data
+        # update all energy sensor with the current new power data
         for nrj_sensor in self.data_handler.energy_sensors:
             nrj_sensor.async_update_callback()
-
 
         if state is None:
             return

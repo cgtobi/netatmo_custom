@@ -6,7 +6,7 @@ import logging
 
 try:
     from .pyatmo import DeviceType
-except Exception:
+except Exception:  # pylint: disable=broad-except
     from pyatmo import DeviceType
 
 from homeassistant.components.select import SelectEntity

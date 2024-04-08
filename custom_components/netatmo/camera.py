@@ -9,7 +9,7 @@ import aiohttp
 try:
     from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
     from .pyatmo.event import Event as NaEvent
-except Exception:
+except Exception:  # pylint: disable=broad-except
     from pyatmo import ApiError as NetatmoApiError, modules as NaModules
     from pyatmo.event import Event as NaEvent
 
