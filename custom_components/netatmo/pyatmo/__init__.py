@@ -3,7 +3,7 @@
 from . import const, modules
 from .account import AsyncAccount
 from .auth import AbstractAsyncAuth
-from .exceptions import ApiError, ApiErrorThrottling, InvalidHome, InvalidRoom, NoDevice, NoSchedule
+from .exceptions import ApiError, ApiErrorThrottling, ApiHomeReachabilityError, InvalidHome, InvalidRoom, NoDevice, NoSchedule
 from .home import Home
 from .modules import Module
 from .modules.device_types import DeviceType
@@ -13,6 +13,7 @@ __all__ = [
     "AbstractAsyncAuth",
     "ApiError",
     "ApiErrorThrottling",
+    "ApiHomeReachabilityError",
     "AsyncAccount",
     "InvalidHome",
     "InvalidRoom",

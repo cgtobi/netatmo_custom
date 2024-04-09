@@ -206,6 +206,11 @@ class NetatmoPublisher:
         self._emissions = []
         self.num_consecutive_errors = 0
 
+    def compute_num_API_calls(self):
+        if self.target and self.method_num_call_probe is not None:
+            return getattr(self.target, self.method_num_call_probe)()
+        return 1
+
     def push_emission(self, ts):
         self.num_consecutive_errors = 0
         if len(self._emissions) >= MAX_EMISSIONS:
@@ -339,10 +344,7 @@ class NetatmoDataHandler:
         num_cph = 0.0
         for p in self._sorted_publisher:
 
-            added_call = 1
-            if p.target and p.method_num_call_probe is not None:
-                added_call = getattr(p.target, p.method_num_call_probe)()
-
+            added_call = p.compute_num_API_calls()
             num_cph += added_call*(3600.0 / p.interval)
 
         return num_cph
@@ -356,11 +358,7 @@ class NetatmoDataHandler:
         for p in self._sorted_publisher:
             if p.name is not None:
                 if p.is_ts_allows_emission(current):
-                    added_call = 1
-                    if p.target and p.method_num_call_probe is not None:
-                        # this can be highly dynamic and could be 0 (like for a reset)
-                        added_call = getattr(p.target, p.method_num_call_probe)()
-
+                    added_call = p.compute_num_API_calls()
                     if num_predicted_calls + added_call > n:
                         break
 
@@ -535,13 +533,16 @@ class NetatmoDataHandler:
 
         if update_only is False:
 
-            num_fetch = 0
+            num_fetch = self.publisher[signal_name].compute_num_API_calls()
             try:
                 num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                     **self.publisher[signal_name].kwargs
                 )
             except pyatmo.NoDevice as err:
                 _LOGGER.debug("fetch error NoDevice: %s", err)
+                has_error = True
+            except pyatmo.ApiHomeReachabilityError as err:
+                _LOGGER.debug("fetch error Not Reachable Home: %s", err)
                 has_error = True
             except pyatmo.ApiErrorThrottling as err:
                 _LOGGER.debug("fetch error Throttling: %s", err)
