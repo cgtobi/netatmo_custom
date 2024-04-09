@@ -227,7 +227,6 @@ class Home:
 
 
 
-
     def get_selected_schedule(self, schedule_type: str = None) -> Schedule | None:
         """Return selected schedule for given home."""
         if schedule_type is None:
