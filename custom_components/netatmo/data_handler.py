@@ -116,32 +116,35 @@ PUBLISHERS_CALL_PROBER = {
 
 
 CALL_PER_HOUR = "CALL_PER_HOUR"
-RATE_LIMIT_FACTOR = "RATE_LIMIT_FACTOR"
 CALL_PER_TEN_SECONDS = "CALL_PER_10S"
+SCAN_INTERVAL = "SCAN_INTERVAL"
 
 NETATMO_USER_CALL_LIMITS = {
     CALL_PER_HOUR: 200,
-    RATE_LIMIT_FACTOR: 1,
-    CALL_PER_TEN_SECONDS: 2  # 2 to comply with the global limit of (2 * number of users) requests every 10 seconds
-}
-NETATMO_DEV_CALL_LIMITS = {
-    CALL_PER_HOUR: 400,
-    RATE_LIMIT_FACTOR: 3,
-    CALL_PER_TEN_SECONDS: 20
-}
-
-
-DEFAULT_INTERVALS = {
+    CALL_PER_TEN_SECONDS: 2,  # 2 to comply with the global limit of (2 * number of users) requests every 10 seconds
     ACCOUNT: 10800,
-    HOME: 150,  # from netatmo discussion it seems home data is updated every 5mn, put half of it here
+    HOME: 150,
     WEATHER: 600,
     AIR_CARE: 300,
     PUBLIC: 600,
     EVENT: 600,
     ENERGY_MEASURE: 1800,
-    AGGREGATE_ENERGY_MEASURE: 60
+    AGGREGATE_ENERGY_MEASURE: 60,
+    SCAN_INTERVAL : 60
 }
-SCAN_INTERVAL = 60
+NETATMO_DEV_CALL_LIMITS = {
+    CALL_PER_HOUR: 400,
+    CALL_PER_TEN_SECONDS: 20,
+    ACCOUNT: 3600,
+    HOME: 15,
+    WEATHER: 200,
+    AIR_CARE: 100,
+    PUBLIC: 200,
+    EVENT: 200,
+    ENERGY_MEASURE: 900,
+    AGGREGATE_ENERGY_MEASURE: 15,
+    SCAN_INTERVAL : 20
+}
 
 CPH_ADJUSTEMENT_DOWN = 0.8
 CPH_ADJUSTEMENT_BACK_UP = 1.1
@@ -193,8 +196,9 @@ class NetatmoPublisher:
     kwargs: dict
     _emissions: list
     num_consecutive_errors: int
+    data_handler: NetatmoDataHandler
 
-    def __init__(self, name, interval, next_scan, target, subscriptions, method, method_num_call_probe, kwargs):
+    def __init__(self, name, interval, next_scan, target, subscriptions, method, method_num_call_probe, data_handler, kwargs):
         self.name = name
         self.interval = interval
         self.next_scan = next_scan
@@ -205,6 +209,7 @@ class NetatmoPublisher:
         self.kwargs = kwargs
         self._emissions = []
         self.num_consecutive_errors = 0
+        self.data_handler = data_handler
 
     def compute_num_API_calls(self):
         if self.target and self.method_num_call_probe is not None:
@@ -221,21 +226,20 @@ class NetatmoPublisher:
 
         if getattr(self.target, "next_need_reset", False) is True:
             # if there is a reset ask : met it assap and so short
-            self.next_scan = ts + max(wait_time, SCAN_INTERVAL)
+            self.next_scan = ts + max(wait_time, self.data_handler._scan_interval)
         else:
             rand_delta = int(self.interval // 8)
             rnd = random.randint(0-rand_delta, rand_delta)
             self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
 
     def is_ts_allows_emission(self, ts):
-        return self.next_scan < ts + max(SCAN_INTERVAL//2, self.interval//8)
+        return self.next_scan < ts + max(self.data_handler._scan_interval//2, self.interval//8)
 
 
 class NetatmoDataHandler:
     """Manages the Netatmo data handling."""
 
     account: pyatmo.AsyncAccount | None
-    _interval_factor: int
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize self."""
@@ -251,10 +255,13 @@ class NetatmoDataHandler:
 
         if config_entry.data["auth_implementation"] == cloud.DOMAIN:
             limits = NETATMO_USER_CALL_LIMITS
+            _LOGGER.debug("NETATMO INTEGRATION : USE GLOBAL LIMITS")
         else:
             limits = NETATMO_DEV_CALL_LIMITS
+            _LOGGER.debug("NETATMO INTEGRATION : USE DEV LIMITS FOR YOUR OWN APP")
 
-        self._interval_factor = limits[RATE_LIMIT_FACTOR]
+        self._limits = limits
+        self._scan_interval = limits[SCAN_INTERVAL]
         self._initial_hourly_rate_limit = limits[CALL_PER_HOUR]
 
         self._10s_rate_limit = limits[CALL_PER_TEN_SECONDS]
@@ -284,7 +291,7 @@ class NetatmoDataHandler:
         """Set up the Netatmo data handler."""
         self.config_entry.async_on_unload(
             async_track_time_interval(
-                self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
+                self.hass, self.async_update, timedelta(seconds=self._scan_interval)
             )
         )
 
@@ -372,10 +379,10 @@ class NetatmoDataHandler:
         if hrl is None:
             hrl = self._initial_hourly_rate_limit
 
-        scan_limit_per_hour = (hrl * SCAN_INTERVAL) // 3600
+        scan_limit_per_hour = (hrl * self._scan_interval) // 3600
 
-        self._min_call_per_interval = int(min(scan_limit_per_hour, (SCAN_INTERVAL // 10) * self._10s_rate_limit))
-        self._max_call_per_interval = int(max(scan_limit_per_hour, (SCAN_INTERVAL // 10) * self._10s_rate_limit))
+        self._min_call_per_interval = int(min(scan_limit_per_hour, (self._scan_interval / 10.0) * self._10s_rate_limit))
+        self._max_call_per_interval = int(max(scan_limit_per_hour, (self._scan_interval / 10.0) * self._10s_rate_limit))
 
     def adjust_intervals_to_target(self,
                                    target,
@@ -416,11 +423,11 @@ class NetatmoDataHandler:
 
         if delta > len(self.rolling_hour):
             # just wait for the full cleaning of the rolling one
-            return 3600 + 2*SCAN_INTERVAL
+            return 3600 + 2*self._scan_interval
         else:
             t_stop = self.rolling_hour[delta - 1]
 
-            return max(SCAN_INTERVAL, int(t_stop + 3600 + SCAN_INTERVAL - current))
+            return max(self._scan_interval, int(t_stop + 3600 + self._scan_interval - current))
 
     async def async_update(self, event_time: datetime) -> None:
         """Update device. """
@@ -437,7 +444,7 @@ class NetatmoDataHandler:
         num_call = max(0, min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - cph_init))
 
         if num_call > 0:
-            delta_sleep = SCAN_INTERVAL // (3*num_call)
+            delta_sleep = self._scan_interval / (3.0*num_call)
         else:
             _LOGGER.info("Getting 0 approved calls: adjusted limit : %f current cph: %i",
                          self._adjusted_hourly_rate_limit, self.get_current_call_per_hour())
@@ -464,7 +471,7 @@ class NetatmoDataHandler:
                     _LOGGER.debug("Error on publisher: %s, num_errors: %i",
                                   publisher, data_class.num_consecutive_errors)
                     # Try again a bit later, this is not a rate limit
-                    data_class.next_scan = current + SCAN_INTERVAL*(data_class.num_consecutive_errors + 1)
+                    data_class.next_scan = current + self._scan_interval*(data_class.num_consecutive_errors + 1)
                 else:
                     self.publisher[publisher].push_emission(current)
                     self.publisher[publisher].set_next_randomized_scan(current)
@@ -605,10 +612,10 @@ class NetatmoDataHandler:
         if publisher == "public":
             kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
 
-        interval = int(DEFAULT_INTERVALS[publisher] / self._interval_factor)
+        interval = int(self._limits[publisher])
         # n = len(self._sorted_publisher)
         self.adjust_per_scan_numbers()
-        # delta_scan = int(SCAN_INTERVAL//(max(self._min_call_per_interval, self._max_call_per_interval)//2 + 1))
+        # delta_scan = int(self._scan_interval//(max(self._min_call_per_interval, self._max_call_per_interval)//2 + 1))
 
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
@@ -618,6 +625,7 @@ class NetatmoDataHandler:
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
             method_num_call_probe=PUBLISHERS_CALL_PROBER.get(publisher, None),
+            data_handler=self,
             kwargs=kwargs,
         )
 
