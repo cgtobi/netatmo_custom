@@ -684,8 +684,11 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
+
+        self.device.reset_measures()
         self._current_start_anchor = datetime.now()
         self.next_need_reset = False
+        self.device.in_reset = False
         self._last_val_sent = None
     
     def complement_publishers(self, netatmo_device):
@@ -771,6 +774,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         if v is None:
             return
 
+
         if self.device.in_reset is False:
             new_val = v + delta_energy
             prev_energy = self._last_val_sent
@@ -778,8 +782,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                 new_val = prev_energy
             state = new_val
 
-           # if delta_energy > 0:
-           #_LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s", self.name, delta_energy, v, v + delta_energy, prev_energy, state)
+            if delta_energy > 0:
+                _LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s", self.name, delta_energy, v, v + delta_energy, prev_energy, state)
         else:
             state = v
 
