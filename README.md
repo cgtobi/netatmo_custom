@@ -32,23 +32,12 @@ Once this integration is properly installed
 
 ### Adding Energy Entities!
 
-We had power entities before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now **sensor.mydevice_energy_sum** goinf straight form the netatmo API, and refined with some power measurement.
-
-There is also two helpers : 
-- **sensor.netatmo_global_energy_sensor** 
-- **sensor.netatmo_global_energy_sensor_power_adapted**
-
-The first one is really the sum of the energy measures from Netatmo/Legrand, but this APIs being really updated every few hours from Netatmo/Legrand, the second one is introduced and estimates the current energy since the last API update with the power API (updated every 5mn)
-For those global sensor we do have also now a new option : the possibility to exclude some meter from those global sum, this is usefull in the case when one of your metter is a global house metter, and you want the global sum to represent only the sum of your loads. 
-As above: 
-1. Go to Settings > Devices & Services > Integrations Select the netatmo one (should have the HACS logo)
-2. Click Configure
-3. If you do have some meters they will appear here, select the oones you want to exclude from the global sensors above
+We had power entities before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now **sensor.mydevice_energy** going straight form the netatmo API, and refined with some power measurement.
 
 ### Probably some new bugs and some fixes too :)
 
 What may be better now:
 
 - Handling of API throttling is more exact we may have less lacunar data now, and better compliance with netatmo rate limites
-- The schdules : now are limited to temperature schedules
+- The schedules : now are limited to temperature schedules
 - Some device that was not exposing power (and now energy) are now exposing it

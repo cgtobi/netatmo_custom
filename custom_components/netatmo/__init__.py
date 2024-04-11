@@ -28,11 +28,11 @@ from homeassistant.helpers import (
     config_entry_oauth2_flow,
     config_validation as cv,
 )
+from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.helpers import device_registry as dr
 
 from . import api
 from .const import (
@@ -49,8 +49,7 @@ from .const import (
     PLATFORMS,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_PUSH_TYPE,
-    CONF_HOMES,
-    CONF_EXCLUDED_METERS,
+    CONF_HOMES
 )
 from .data_handler import NetatmoDataHandler
 from .webhook import async_handle_webhook
@@ -119,9 +118,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     }
 
-    local_data_handler = NetatmoDataHandler(hass, entry)
-    hass.data[DOMAIN][entry.entry_id][DATA_HANDLER] = local_data_handler
-    await local_data_handler.async_setup()
+    data_handler = NetatmoDataHandler(hass, entry)
+    hass.data[DOMAIN][entry.entry_id][DATA_HANDLER] = data_handler
+    await data_handler.async_setup()
 
     async def unregister_webhook(
         _: Any,
@@ -278,14 +277,18 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
             pass
 
 
-# allows to manually delete devices not exposed anymore
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: dr.DeviceEntry
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
 ) -> bool:
-    """Remove august config entry from a device if its no longer present."""
+    """Remove a config entry from a device."""
+    data = hass.data[DOMAIN][config_entry.entry_id][DATA_HANDLER]
+    modules = [m for h in data.account.homes.values() for m in h.modules]
+    rooms = [r for h in data.account.homes.values() for r in h.rooms]
 
-    for identifier in device_entry.identifiers:
-        if identifier[0] == DOMAIN and identifier[1] in hass.data[DOMAIN][DATA_DEVICE_IDS]:
-            return False
-
-    return True
+    return not any(
+        identifier
+        for identifier in device_entry.identifiers
+        if identifier[0] == DOMAIN
+        and identifier[1] in modules
+        or identifier[1] in rooms
+    )

@@ -49,7 +49,6 @@ from .const import (
     NETATMO_CREATE_SELECT,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_ENERGY,
-    NETATMO_CREATE_ENERGY_AGGREGATION,
     NETATMO_CREATE_SWITCH,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
@@ -75,7 +74,6 @@ AIR_CARE = "air_care"
 PUBLIC = NetatmoDeviceType.public
 EVENT = "event"
 ENERGY_MEASURE = "energy"
-AGGREGATE_ENERGY_MEASURE = "aggregate_energy"
 
 PUBLISHERS = {
     ACCOUNT: "async_update_topology",
@@ -85,13 +83,11 @@ PUBLISHERS = {
     PUBLIC: "async_update_public_weather",
     EVENT: "async_update_events",
     ENERGY_MEASURE: "async_update_energy",
-    AGGREGATE_ENERGY_MEASURE: "async_update_aggregate_energy"
 }
 
 
 PUBLISHERS_CALL_PROBER = {
     ENERGY_MEASURE: "update_measures_num_calls",
-    AGGREGATE_ENERGY_MEASURE: "update_aggregate_energy_num_calls"
 }
 
 # Netatmo rate limiting: https://dev.netatmo.com/guideline
@@ -129,7 +125,6 @@ NETATMO_USER_CALL_LIMITS = {
     PUBLIC: 600,
     EVENT: 600,
     ENERGY_MEASURE: 1800,
-    AGGREGATE_ENERGY_MEASURE: 60,
     SCAN_INTERVAL : 60
 }
 NETATMO_DEV_CALL_LIMITS = {
@@ -142,7 +137,6 @@ NETATMO_DEV_CALL_LIMITS = {
     PUBLIC: 200,
     EVENT: 200,
     ENERGY_MEASURE: 900,
-    AGGREGATE_ENERGY_MEASURE: 15,
     SCAN_INTERVAL : 20
 }
 
@@ -666,12 +660,6 @@ class NetatmoDataHandler:
         await self.subscribe(AIR_CARE, AIR_CARE, None)
 
         self.setup_air_care()
-
-        async_dispatcher_send(
-            self.hass,
-            NETATMO_CREATE_ENERGY_AGGREGATION,
-            self,
-        )
 
         for home in self.account.homes.values():
             signal_home = f"{HOME}-{home.entity_id}"

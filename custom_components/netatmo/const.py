@@ -9,9 +9,11 @@ MANUFACTURER = "Netatmo"
 DEFAULT_ATTRIBUTION = f"Data provided by {MANUFACTURER}"
 
 PLATFORMS = [
+    Platform.BINARY_SENSOR,
     Platform.CAMERA,
     Platform.CLIMATE,
     Platform.COVER,
+    Platform.FAN,
     Platform.LIGHT,
     Platform.SELECT,
     Platform.SENSOR,
@@ -40,7 +42,6 @@ API_SCOPES_EXCLUDED_FROM_CLOUD = [
 
 NETATMO_CREATE_BATTERY = "netatmo_create_battery"
 NETATMO_CREATE_ENERGY = "netatmo_create_energy"
-NETATMO_CREATE_ENERGY_AGGREGATION = "netatmo_create_energy_aggregation"
 NETATMO_CREATE_CAMERA = "netatmo_create_camera"
 NETATMO_CREATE_CAMERA_LIGHT = "netatmo_create_camera_light"
 NETATMO_CREATE_CLIMATE = "netatmo_create_climate"
@@ -63,8 +64,6 @@ CONF_NEW_AREA = "new_area"
 CONF_PUBLIC_MODE = "mode"
 CONF_WEATHER_AREAS = "weather_areas"
 CONF_HOMES = "selected_homes"
-CONF_EXCLUDED_METERS = "excluded_meters_in_sum"
-
 
 OAUTH2_AUTHORIZE = "https://api.netatmo.com/oauth2/authorize"
 OAUTH2_TOKEN = "https://api.netatmo.com/oauth2/token"

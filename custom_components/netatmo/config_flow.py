@@ -31,7 +31,6 @@ from .const import (
     CONF_WEATHER_AREAS,
     DOMAIN,
     CONF_HOMES,
-    CONF_EXCLUDED_METERS,
     DATA_HANDLER,
 )
 
@@ -118,7 +117,6 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
         self.options = dict(config_entry.options)
         self.options.setdefault(CONF_WEATHER_AREAS, {})
         self.options.setdefault(CONF_HOMES, {})
-        self.options.setdefault(CONF_EXCLUDED_METERS, {})
 
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Manage the Netatmo options."""
@@ -147,60 +145,24 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
         weather_areas = list(self.options[CONF_WEATHER_AREAS])
 
         schema = {}
+        homes = {}
 
-        try:
-            homes = {}
+        acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes
 
-            acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes
+        for home_id, home in acc_homes.items():
+            homes[home.entity_id] = home.name
 
-            for home_id, home in acc_homes.items():
-                homes[home.entity_id] = home.name
+        if len(homes) > 1:
+            l_homes = self.options.get(CONF_HOMES, [])
+            if len(l_homes) == 0:
+                l_homes = [hid for hid in homes]
+            schema.update({
+                vol.Optional(
+                    CONF_HOMES,
+                    default=l_homes,
+                ): cv.multi_select(homes),
 
-            if len(homes) > 1:
-                l_homes = self.options.get(CONF_HOMES, [])
-                if len(l_homes) == 0:
-                    l_homes = [hid for hid in homes]
-                schema.update({
-                    vol.Optional(
-                        CONF_HOMES,
-                        default=l_homes,
-                    ): cv.multi_select(homes),
-
-                })
-
-        except Exception:  # pylint: disable=broad-except
-            pass
-
-        try:
-
-            acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.homes
-
-            meters = {}
-
-            for home_id, home in acc_homes.items():
-                for m_id, module in home.modules.items():
-                    if module.device_category == DeviceCategory.meter:
-                        meters[m_id] = module.name
-
-            if len(meters) > 0:
-
-                l_meters = self.options.get(CONF_EXCLUDED_METERS, [])
-                if len(l_meters) > 0:
-                    schema.update({
-                        vol.Optional(
-                            CONF_EXCLUDED_METERS,
-                            default=l_meters,
-                        ): cv.multi_select(meters),
-                    })
-                else:
-                    schema.update({
-                        vol.Optional(
-                            CONF_EXCLUDED_METERS,
-                        ): cv.multi_select(meters),
-                    })
-
-        except Exception:  # pylint: disable=broad-except
-            pass
+            })
 
         schema.update({
             vol.Optional(
