@@ -302,7 +302,7 @@ class NetatmoDataHandler:
         num_calls = 0
 
         for method in ["async_update_topology", "async_update_status"]:
-            for i in range(3):
+            for i in range(5):
                 has_error = False
                 try:
                     num_calls += await getattr(self.account, method)()
