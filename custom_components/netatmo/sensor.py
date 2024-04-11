@@ -687,7 +687,6 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         self._current_start_anchor = datetime.now()
         self.next_need_reset = False
         self._last_val_sent = None
-        self.data_handler.energy_sensors.append(self)
     
     def complement_publishers(self, netatmo_device):
         self._publishers.extend(
@@ -696,6 +695,11 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                     "name": ENERGY_MEASURE,
                     "target_module": self,
                     SIGNAL_NAME: self._attr_unique_id,
+                },
+                {
+                    "name": HOME,
+                    "home_id": self.home.entity_id,
+                    SIGNAL_NAME: netatmo_device.signal_name,
                 },
             ]
         )
@@ -773,6 +777,9 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             if prev_energy is not None and prev_energy > new_val:
                 new_val = prev_energy
             state = new_val
+
+           # if delta_energy > 0:
+           #_LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s", self.name, delta_energy, v, v + delta_energy, prev_energy, state)
         else:
             state = v
 

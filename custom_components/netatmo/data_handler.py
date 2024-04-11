@@ -245,8 +245,6 @@ class NetatmoDataHandler:
         self._sorted_publisher: list[NetatmoPublisher] = []
         self._webhook: bool = False
 
-        self.energy_sensors: list[NetatmoEnergySensor] | None = []
-
         if config_entry.data["auth_implementation"] == cloud.DOMAIN:
             limits = NETATMO_USER_CALL_LIMITS
             _LOGGER.debug("NETATMO INTEGRATION : USE GLOBAL LIMITS")
