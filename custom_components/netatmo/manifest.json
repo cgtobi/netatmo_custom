@@ -1,7 +1,7 @@
 {
   "domain": "netatmo",
   "name": "Netatmo",
-  "version": "2024.04.04",
+  "version": "2024.04.18",
   "after_dependencies": ["cloud", "media_source"],
   "codeowners": ["@cgtobi"],
   "config_flow": true,

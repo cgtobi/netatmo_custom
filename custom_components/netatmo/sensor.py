@@ -148,6 +148,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="temp_trend",
+        name="Temperature trend",
         netatmo_name="temp_trend",
         entity_registry_enabled_default=False,
     ),
@@ -168,6 +169,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="pressure_trend",
+        name="Pressure trend",
         netatmo_name="pressure_trend",
         entity_registry_enabled_default=False,
     ),
@@ -218,6 +220,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="windangle",
+        name="Direction",
         netatmo_name="wind_direction",
         device_class=SensorDeviceClass.ENUM,
         options=DIRECTION_OPTIONS,
@@ -225,6 +228,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="windangle_value",
+        name="Angle",
         netatmo_name="wind_angle",
         entity_registry_enabled_default=False,
         native_unit_of_measurement=DEGREE,
@@ -239,6 +243,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="gustangle",
+        name="Gust Direction",
         netatmo_name="gust_direction",
         entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.ENUM,
@@ -247,6 +252,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="gustangle_value",
+        name="Gust Angle",
         netatmo_name="gust_angle",
         entity_registry_enabled_default=False,
         native_unit_of_measurement=DEGREE,
@@ -262,12 +268,14 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="reachable",
+        name="Reachability",
         netatmo_name="reachable",
         entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     NetatmoSensorEntityDescription(
         key="rf_status",
+        name="Radio",
         netatmo_name="rf_strength",
         entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -275,6 +283,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="wifi_status",
+        name="Wifi",
         netatmo_name="wifi_strength",
         entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -282,6 +291,7 @@ SENSOR_TYPES: tuple[NetatmoSensorEntityDescription, ...] = (
     ),
     NetatmoSensorEntityDescription(
         key="health_idx",
+        name="Health",
         netatmo_name="health_idx",
         device_class=SensorDeviceClass.ENUM,
         options=["healthy", "fine", "fair", "poor", "unhealthy"],
@@ -428,7 +438,7 @@ async def async_setup_entry(
 
         if ENERGY_SENSOR_DESCRIPTION.netatmo_name in netatmo_device.device.features or hasattr(netatmo_device.device, ENERGY_SENSOR_DESCRIPTION.netatmo_name):
             _LOGGER.debug(
-                "Adding %s energy sum sensor %s",
+                "Adding %s energy sensor %s",
                 netatmo_device.device.device_category,
                 netatmo_device.device.name,
             )
@@ -641,6 +651,14 @@ class NetatmoBaseSensor(NetatmoModuleEntity, SensorEntity):
             f"{self.device.entity_id}-{self.device.entity_id}-{description.key}"
         )
 
+        if description.device_class is None or description.device_class == SensorDeviceClass.ENUM:
+            name = self.entity_description.name
+            if name is None:
+                name = self.entity_description.key
+
+            self._attr_name = f"{self.device.name} {name}"
+
+
         self.complement_publishers(netatmo_device)
 
     @abstractmethod
@@ -797,11 +815,10 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             if prev_energy is not None and prev_energy > new_val:
                 new_val = prev_energy
             state = new_val
-
-            if delta_energy > 0:
-                _LOGGER.debug("<<<< DELTA ENERGY ON: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s", self.name, delta_energy, v, v + delta_energy, prev_energy, state)
+            _LOGGER.debug("UPDATE ENERGY FOR: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s", self.device.name, delta_energy, v, v + delta_energy, prev_energy, state)
         else:
             state = v
+            _LOGGER.debug("RESET ENERGY FOR: %s RETAINED: %s", self.device.name, v)
 
         self._attr_available = True
         self._attr_native_value = state

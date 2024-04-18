@@ -34,16 +34,6 @@ from .const import (
     DATA_HANDLER,
 )
 
-try:
-    from .pyatmo.modules.device_types import (
-        DeviceCategory
-    )
-except Exception:  # pylint: disable=broad-except
-
-    from pyatmo.modules.device_types import (
-        DeviceCategory
-    )
-
 _LOGGER = logging.getLogger(__name__)
 
 

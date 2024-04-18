@@ -59,11 +59,6 @@ from .const import (
     CONF_HOMES,
 )
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .sensor import NetatmoEnergySensor
-
-
 _LOGGER = logging.getLogger(__name__)
 
 SIGNAL_NAME = "signal_name"
@@ -173,10 +168,6 @@ class NetatmoRoom:
     parent_id: str
     signal_name: str
 
-
-MAX_EMISSIONS = 10
-
-
 @dataclass
 class NetatmoPublisher:
     """Class for keeping track of Netatmo data class metadata."""
@@ -188,7 +179,6 @@ class NetatmoPublisher:
     subscriptions: set[CALLBACK_TYPE | None]
     method: str
     kwargs: dict
-    _emissions: list
     num_consecutive_errors: int
     data_handler: NetatmoDataHandler
 
@@ -201,7 +191,6 @@ class NetatmoPublisher:
         self.method = method
         self.method_num_call_probe = method_num_call_probe
         self.kwargs = kwargs
-        self._emissions = []
         self.num_consecutive_errors = 0
         self.data_handler = data_handler
 
@@ -212,9 +201,6 @@ class NetatmoPublisher:
 
     def push_emission(self, ts):
         self.num_consecutive_errors = 0
-        if len(self._emissions) >= MAX_EMISSIONS:
-            self._emissions.pop(0)
-        self._emissions.append(ts)
 
     def set_next_randomized_scan(self, ts, wait_time=0):
 
@@ -244,7 +230,6 @@ class NetatmoDataHandler:
         self.publisher: dict[str, NetatmoPublisher] = {}
         self._sorted_publisher: list[NetatmoPublisher] = []
         self._webhook: bool = False
-
         if config_entry.data["auth_implementation"] == cloud.DOMAIN:
             limits = NETATMO_USER_CALL_LIMITS
             _LOGGER.debug("NETATMO INTEGRATION : USE GLOBAL LIMITS")
@@ -428,7 +413,7 @@ class NetatmoDataHandler:
         if self._adjusted_hourly_rate_limit is None:
             self.adjust_intervals_to_target(self._initial_hourly_rate_limit, force_adjust=False)
 
-        # keep cph up to date whatever happens
+        # keep cph up to date whatever happens (time increment)
         self.add_api_call(0)
 
         cph_init = self.get_current_call_per_hour()
@@ -500,11 +485,6 @@ class NetatmoDataHandler:
                     self.adjust_intervals_to_target(new_target, force_adjust=True, redo_next_scan=False)
                     self._last_cph_change = current
 
-    async def async_update_aggregate_energy(self):
-        return 0
-
-    def update_aggregate_energy_num_calls(self):
-        return 0
 
     @callback
     def async_force_update(self, signal_name: str) -> None:
@@ -632,6 +612,7 @@ class NetatmoDataHandler:
             raise
 
         self._sorted_publisher.append(self.publisher[signal_name])
+        _LOGGER.debug("Publisher %s added", signal_name)
 
     async def unsubscribe(
         self, signal_name: str, update_callback: CALLBACK_TYPE | None

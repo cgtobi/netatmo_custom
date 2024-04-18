@@ -63,14 +63,7 @@ class NetatmoBaseEntity(Entity):
                     update_callback=self.async_update_callback,
                     home_id=publisher["home_id"],
                 )
-            elif "data_handler" in publisher:
-                await self.data_handler.subscribe_with_target(
-                    publisher=publisher["name"],
-                    signal_name=signal_name,
-                    target=publisher["data_handler"],
-                    update_callback=self.async_update_callback,
-                    update_only=True
-                )
+
             elif publisher["name"] == PUBLIC:
                 await self.data_handler.subscribe(
                     publisher["name"],
