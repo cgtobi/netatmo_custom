@@ -168,6 +168,7 @@ class NetatmoRoom:
     parent_id: str
     signal_name: str
 
+
 @dataclass
 class NetatmoPublisher:
     """Class for keeping track of Netatmo data class metadata."""
@@ -213,7 +214,7 @@ class NetatmoPublisher:
             self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
 
     def is_ts_allows_emission(self, ts):
-        return self.next_scan < ts + max(self.data_handler._scan_interval//2, self.interval//8)
+        return self.next_scan < ts + max(self.data_handler._scan_interval, self.interval//12)
 
 
 class NetatmoDataHandler:
@@ -265,20 +266,6 @@ class NetatmoDataHandler:
         return int(len(self.rolling_hour))
 
     async def async_setup(self) -> None:
-        """Set up the Netatmo data handler."""
-        self.config_entry.async_on_unload(
-            async_track_time_interval(
-                self.hass, self.async_update, timedelta(seconds=self._scan_interval)
-            )
-        )
-
-        self.config_entry.async_on_unload(
-            async_dispatcher_connect(
-                self.hass,
-                f"signal-{DOMAIN}-webhook-None",
-                self.handle_event,
-            )
-        )
 
         homes = self.config_entry.options.get(CONF_HOMES, [])
 
@@ -322,7 +309,24 @@ class NetatmoDataHandler:
         await self.hass.config_entries.async_forward_entry_setups(
             self.config_entry, PLATFORMS
         )
+
         await self.async_dispatch()
+
+
+        """Set up the Netatmo data handler. Do that at the end to have a good and proper init before calling it"""
+        self.config_entry.async_on_unload(
+            async_track_time_interval(
+                self.hass, self.async_update, timedelta(seconds=self._scan_interval)
+            )
+        )
+
+        self.config_entry.async_on_unload(
+            async_dispatcher_connect(
+                self.hass,
+                f"signal-{DOMAIN}-webhook-None",
+                self.handle_event,
+            )
+        )
 
     def compute_theoretical_call_per_hour(self):
         num_cph = 0.0
@@ -362,12 +366,25 @@ class NetatmoDataHandler:
         self._max_call_per_interval = int(max(scan_limit_per_hour, (self._scan_interval / 10.0) * self._10s_rate_limit))
 
     def adjust_intervals_to_target(self,
-                                   target,
+                                   target=None,
                                    force_adjust=False,
                                    redo_next_scan=True,
                                    do_wait_scan_for_cph_to_target=False):
 
         current = int(time())
+
+        if target is None:
+            if self._adjusted_hourly_rate_limit is None:
+                target = self._initial_hourly_rate_limit
+            else:
+                target = self._adjusted_hourly_rate_limit
+        else:
+            target = min(self._initial_hourly_rate_limit, int(target))
+
+        if self._adjusted_hourly_rate_limit is not None and force_adjust is False and target == self._adjusted_hourly_rate_limit:
+            #no need to adjust anything
+            return
+
 
         if do_wait_scan_for_cph_to_target:
             # wait for a bit longer to reach 80% of the target cph to have 20% of room to breath
@@ -410,8 +427,7 @@ class NetatmoDataHandler:
         """Update device. """
 
         # no need all the time but fairly quick
-        if self._adjusted_hourly_rate_limit is None:
-            self.adjust_intervals_to_target(self._initial_hourly_rate_limit, force_adjust=False)
+        self.adjust_intervals_to_target()
 
         # keep cph up to date whatever happens (time increment)
         self.add_api_call(0)
@@ -448,7 +464,7 @@ class NetatmoDataHandler:
                     _LOGGER.debug("Error on publisher: %s, num_errors: %i",
                                   publisher, data_class.num_consecutive_errors)
                     # Try again a bit later, this is not a rate limit
-                    data_class.next_scan = current + self._scan_interval*(data_class.num_consecutive_errors + 1)
+                    data_class.next_scan = current + self._scan_interval #*(data_class.num_consecutive_errors + 1)
                 else:
                     self.publisher[publisher].push_emission(current)
                     self.publisher[publisher].set_next_randomized_scan(current)
@@ -586,13 +602,11 @@ class NetatmoDataHandler:
 
         interval = int(self._limits[publisher])
         # n = len(self._sorted_publisher)
-        self.adjust_per_scan_numbers()
-        # delta_scan = int(self._scan_interval//(max(self._min_call_per_interval, self._max_call_per_interval)//2 + 1))
 
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
-            next_scan=time() + interval//2,  # + n*delta_scan, #at init time try to get some data
+            next_scan=time() + interval//2, #start sooner at start to get some data points
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
