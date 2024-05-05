@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from ..const import (
@@ -42,6 +42,7 @@ from ..modules.module import (
 )
 
 LOG = logging.getLogger(__name__)
+
 
 # pylint: disable=R0901
 
@@ -224,13 +225,13 @@ class PublicWeatherArea:
     modules: list[dict[str, Any]]
 
     def __init__(
-        self,
-        lat_ne: str,
-        lon_ne: str,
-        lat_sw: str,
-        lon_sw: str,
-        required_data_type: str | None = None,
-        filtering: bool = False,
+            self,
+            lat_ne: str,
+            lon_ne: str,
+            lat_sw: str,
+            lon_sw: str,
+            required_data_type: str | None = None,
+            filtering: bool = False,
     ) -> None:
         """Initialize self."""
 
@@ -302,10 +303,10 @@ class PublicWeatherArea:
         for station in self.modules:
             for module in station["measures"].values():
                 if (
-                    "type" in module
-                    and data_type in module["type"]
-                    and "res" in module
-                    and module["res"]
+                        "type" in module
+                        and data_type in module["type"]
+                        and "res" in module
+                        and module["res"]
                 ):
                     measure_index = module["type"].index(data_type)
                     latest_timestamp = sorted(module["res"], reverse=True)[0]

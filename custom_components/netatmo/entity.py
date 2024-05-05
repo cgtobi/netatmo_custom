@@ -81,8 +81,8 @@ class NetatmoBaseEntity(Entity):
                 )
 
             if any(
-                sub is None
-                for sub in self.data_handler.publisher[signal_name].subscriptions
+                    sub is None
+                    for sub in self.data_handler.publisher[signal_name].subscriptions
             ):
                 await self.data_handler.unsubscribe(signal_name, None)
 
@@ -149,7 +149,7 @@ class NetatmoRoomEntity(NetatmoDeviceEntity):
         await super().async_added_to_hass()
         registry = dr.async_get(self.hass)
         if device := registry.async_get_device(
-            identifiers={(DOMAIN, self.device.entity_id)}
+                identifiers={(DOMAIN, self.device.entity_id)}
         ):
             self.hass.data[DOMAIN][DATA_DEVICE_IDS][self.device.entity_id] = device.id
 

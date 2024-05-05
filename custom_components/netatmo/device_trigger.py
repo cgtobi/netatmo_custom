@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import voluptuous as vol
-
 from homeassistant.components.device_automation import DEVICE_TRIGGER_BASE_SCHEMA
 from homeassistant.components.device_automation.exceptions import (
     InvalidDeviceAutomationConfig,
@@ -65,7 +64,7 @@ TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
 
 
 async def async_validate_trigger_config(
-    hass: HomeAssistant, config: ConfigType
+        hass: HomeAssistant, config: ConfigType
 ) -> ConfigType:
     """Validate config."""
     config = TRIGGER_SCHEMA(config)
@@ -81,9 +80,9 @@ async def async_validate_trigger_config(
     trigger = config[CONF_TYPE]
 
     if (
-        not device
-        or device.model not in DEVICES
-        or trigger not in DEVICES[device.model]
+            not device
+            or device.model not in DEVICES
+            or trigger not in DEVICES[device.model]
     ):
         raise InvalidDeviceAutomationConfig(f"Unsupported model {device.model}")
 
@@ -91,7 +90,7 @@ async def async_validate_trigger_config(
 
 
 async def async_get_triggers(
-    hass: HomeAssistant, device_id: str
+        hass: HomeAssistant, device_id: str
 ) -> list[dict[str, str]]:
     """List device triggers for Netatmo devices."""
     registry = er.async_get(hass)
@@ -100,7 +99,7 @@ async def async_get_triggers(
 
     for entry in er.async_entries_for_device(registry, device_id):
         if (
-            device := device_registry.async_get(device_id)
+                device := device_registry.async_get(device_id)
         ) is None or device.model is None:
             continue
 
@@ -132,10 +131,10 @@ async def async_get_triggers(
 
 
 async def async_attach_trigger(
-    hass: HomeAssistant,
-    config: ConfigType,
-    action: TriggerActionType,
-    trigger_info: TriggerInfo,
+        hass: HomeAssistant,
+        config: ConfigType,
+        action: TriggerActionType,
+        trigger_info: TriggerInfo,
 ) -> CALLBACK_TYPE:
     """Attach a trigger."""
     device_registry = dr.async_get(hass)

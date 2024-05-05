@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import logging
-from typing import Any
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
     ConfigEntry,
@@ -47,7 +46,7 @@ class NetatmoFlowHandler(
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: ConfigEntry,
+            config_entry: ConfigEntry,
     ) -> OptionsFlow:
         """Get the options flow for this handler."""
         return NetatmoOptionsFlowHandler(config_entry)
@@ -73,13 +72,13 @@ class NetatmoFlowHandler(
         return await super().async_step_user(user_input)
 
     async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
+            self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
         """Perform reauth upon an API authentication error."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
-        self, user_input: dict | None = None
+            self, user_input: dict | None = None
     ) -> ConfigFlowResult:
         """Dialog that informs the user that reauth is required."""
         if user_input is None:
@@ -113,7 +112,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
         return await self.async_step_public_weather_areas_and_homes()
 
     async def async_step_public_weather_areas_and_homes(
-        self, user_input: dict | None = None
+            self, user_input: dict | None = None
     ) -> ConfigFlowResult:
         """Manage configuration of Netatmo public weather areas."""
         errors: dict = {}

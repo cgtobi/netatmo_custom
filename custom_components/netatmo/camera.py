@@ -6,6 +6,7 @@ import logging
 from typing import Any, cast
 
 import aiohttp
+
 try:
     from .pyatmo import ApiError as NetatmoApiError, modules as NaModules
     from .pyatmo.event import Event as NaEvent
@@ -52,7 +53,7 @@ DEFAULT_QUALITY = "high"
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo camera platform."""
 
@@ -96,8 +97,8 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
     _attr_name = None
 
     def __init__(
-        self,
-        netatmo_device: NetatmoDevice,
+            self,
+            netatmo_device: NetatmoDevice,
     ) -> None:
         """Set up for access to the Netatmo camera images."""
         Camera.__init__(self)
@@ -145,15 +146,15 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
             return
 
         if (
-            data["home_id"] == self.home.entity_id
-            and data["camera_id"] == self.device.entity_id
+                data["home_id"] == self.home.entity_id
+                and data["camera_id"] == self.device.entity_id
         ):
             if data[WEBHOOK_PUSH_TYPE] in ("NACamera-off", "NACamera-disconnection"):
                 self._attr_is_streaming = False
                 self._monitoring = False
             elif data[WEBHOOK_PUSH_TYPE] in (
-                "NACamera-on",
-                WEBHOOK_NACAMERA_CONNECTION,
+                    "NACamera-on",
+                    WEBHOOK_NACAMERA_CONNECTION,
             ):
                 self._attr_is_streaming = True
                 self._monitoring = True
@@ -167,17 +168,17 @@ class NetatmoCamera(NetatmoModuleEntity, Camera):
             return
 
     async def async_camera_image(
-        self, width: int | None = None, height: int | None = None
+            self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
         """Return a still image response from the camera."""
         try:
             return cast(bytes, await self.device.async_get_live_snapshot())
         except (
-            aiohttp.ClientPayloadError,
-            aiohttp.ContentTypeError,
-            aiohttp.ServerDisconnectedError,
-            aiohttp.ClientConnectorError,
-            NetatmoApiError,
+                aiohttp.ClientPayloadError,
+                aiohttp.ContentTypeError,
+                aiohttp.ServerDisconnectedError,
+                aiohttp.ClientConnectorError,
+                NetatmoApiError,
         ) as err:
             _LOGGER.debug("Could not fetch live camera image (%s)", err)
         return None

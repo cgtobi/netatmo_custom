@@ -67,10 +67,10 @@ PRESET_SCHEDULE = "Schedule"
 PRESET_MANUAL = "Manual"
 
 SUPPORT_FLAGS = (
-    ClimateEntityFeature.TARGET_TEMPERATURE
-    | ClimateEntityFeature.PRESET_MODE
-    | ClimateEntityFeature.TURN_OFF
-    | ClimateEntityFeature.TURN_ON
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
 )
 SUPPORT_PRESET = [PRESET_AWAY, PRESET_BOOST, PRESET_FROST_GUARD, PRESET_SCHEDULE]
 
@@ -122,7 +122,7 @@ NA_VALVE = DeviceType.NRV
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo energy platform."""
 
@@ -229,10 +229,10 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
         await super().async_added_to_hass()
 
         for event_type in (
-            EVENT_TYPE_SET_POINT,
-            EVENT_TYPE_THERM_MODE,
-            EVENT_TYPE_CANCEL_SET_POINT,
-            EVENT_TYPE_SCHEDULE,
+                EVENT_TYPE_SET_POINT,
+                EVENT_TYPE_THERM_MODE,
+                EVENT_TYPE_CANCEL_SET_POINT,
+                EVENT_TYPE_SCHEDULE,
         ):
             self.async_on_remove(
                 async_dispatcher_connect(
@@ -285,8 +285,8 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
 
         for room in home.get("rooms", []):
             if (
-                data["event_type"] == EVENT_TYPE_SET_POINT
-                and self.device.entity_id == room["id"]
+                    data["event_type"] == EVENT_TYPE_SET_POINT
+                    and self.device.entity_id == room["id"]
             ):
                 if room["therm_setpoint_mode"] == STATE_NETATMO_OFF:
                     self._attr_hvac_mode = HVACMode.OFF
@@ -307,8 +307,8 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
                 return
 
             if (
-                data["event_type"] == EVENT_TYPE_CANCEL_SET_POINT
-                and self.device.entity_id == room["id"]
+                    data["event_type"] == EVENT_TYPE_CANCEL_SET_POINT
+                    and self.device.entity_id == room["id"]
             ):
                 if self._attr_hvac_mode == HVACMode.OFF:
                     self._attr_hvac_mode = HVACMode.AUTO
@@ -325,7 +325,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
             return CURRENT_HVAC_MAP_NETATMO[self._boilerstatus]
         # Maybe it is a valve
         if (
-            heating_req := getattr(self.device, "heating_power_request", 0)
+                heating_req := getattr(self.device, "heating_power_request", 0)
         ) is not None and heating_req > 0:
             return HVACAction.HEATING
         return HVACAction.IDLE
@@ -342,24 +342,24 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
         if (
-            preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
-            and self.device_type == NA_VALVE
-            and self._attr_hvac_mode == HVACMode.HEAT
+                preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
+                and self.device_type == NA_VALVE
+                and self._attr_hvac_mode == HVACMode.HEAT
         ):
             await self.device.async_therm_set(
                 STATE_NETATMO_HOME,
             )
         elif (
-            preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
-            and self.device_type == NA_VALVE
+                preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
+                and self.device_type == NA_VALVE
         ):
             await self.device.async_therm_set(
                 STATE_NETATMO_MANUAL,
                 DEFAULT_MAX_TEMP,
             )
         elif (
-            preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
-            and self._attr_hvac_mode == HVACMode.HEAT
+                preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX)
+                and self._attr_hvac_mode == HVACMode.HEAT
         ):
             await self.device.async_therm_set(STATE_NETATMO_HOME)
         elif preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX):
@@ -461,7 +461,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
         )
 
     async def _async_service_set_preset_mode_with_end_datetime(
-        self, **kwargs: Any
+            self, **kwargs: Any
     ) -> None:
         preset_mode = kwargs[ATTR_PRESET_MODE]
         end_datetime = kwargs[ATTR_END_DATETIME]
@@ -478,7 +478,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
         )
 
     async def _async_service_set_temperature_with_end_datetime(
-        self, **kwargs: Any
+            self, **kwargs: Any
     ) -> None:
         target_temperature = kwargs[ATTR_TARGET_TEMPERATURE]
         end_datetime = kwargs[ATTR_END_DATETIME]
@@ -493,7 +493,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
         await self.device.async_therm_manual(target_temperature, end_timestamp)
 
     async def _async_service_set_temperature_with_time_period(
-        self, **kwargs: Any
+            self, **kwargs: Any
     ) -> None:
         target_temperature = kwargs[ATTR_TARGET_TEMPERATURE]
         time_period = kwargs[ATTR_TIME_PERIOD]

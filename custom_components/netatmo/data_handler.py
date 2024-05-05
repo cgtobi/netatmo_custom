@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 from time import time
 from typing import Any
-import asyncio
+
 import aiohttp
-import random
+
 try:
     from . import pyatmo
     from .pyatmo.modules.device_types import (
@@ -80,7 +82,6 @@ PUBLISHERS = {
     ENERGY_MEASURE: "async_update_energy",
 }
 
-
 PUBLISHERS_CALL_PROBER = {
     ENERGY_MEASURE: "update_measures_num_calls",
 }
@@ -120,7 +121,7 @@ NETATMO_USER_CALL_LIMITS = {
     PUBLIC: 600,
     EVENT: 600,
     ENERGY_MEASURE: 1800,
-    SCAN_INTERVAL : 60
+    SCAN_INTERVAL: 60
 }
 NETATMO_DEV_CALL_LIMITS = {
     CALL_PER_HOUR: 400,
@@ -132,7 +133,7 @@ NETATMO_DEV_CALL_LIMITS = {
     PUBLIC: 200,
     EVENT: 200,
     ENERGY_MEASURE: 900,
-    SCAN_INTERVAL : 20
+    SCAN_INTERVAL: 20
 }
 
 CPH_ADJUSTEMENT_DOWN = 0.8
@@ -183,7 +184,8 @@ class NetatmoPublisher:
     num_consecutive_errors: int
     data_handler: NetatmoDataHandler
 
-    def __init__(self, name, interval, next_scan, target, subscriptions, method, method_num_call_probe, data_handler, kwargs):
+    def __init__(self, name, interval, next_scan, target, subscriptions, method, method_num_call_probe, data_handler,
+                 kwargs):
         self.name = name
         self.interval = interval
         self.next_scan = next_scan
@@ -210,11 +212,11 @@ class NetatmoPublisher:
             self.next_scan = ts + max(wait_time, self.data_handler._scan_interval)
         else:
             rand_delta = int(self.interval // 8)
-            rnd = random.randint(0-rand_delta, rand_delta)
+            rnd = random.randint(0 - rand_delta, rand_delta)
             self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
 
     def is_ts_allows_emission(self, ts):
-        return self.next_scan < ts + max(self.data_handler._scan_interval, self.interval//12)
+        return self.next_scan < ts + max(self.data_handler._scan_interval, self.interval // 12)
 
 
 class NetatmoDataHandler:
@@ -312,7 +314,6 @@ class NetatmoDataHandler:
 
         await self.async_dispatch()
 
-
         """Set up the Netatmo data handler. Do that at the end to have a good and proper init before calling it"""
         self.config_entry.async_on_unload(
             async_track_time_interval(
@@ -331,14 +332,13 @@ class NetatmoDataHandler:
     def compute_theoretical_call_per_hour(self):
         num_cph = 0.0
         for p in self._sorted_publisher:
-
             added_call = p.compute_num_API_calls()
-            num_cph += added_call*(3600.0 / p.interval)
+            num_cph += added_call * (3600.0 / p.interval)
 
         return num_cph
 
     def get_publisher_candidates(self, current, n):
-        self._sorted_publisher = sorted(self._sorted_publisher,  key=lambda x: x.next_scan)
+        self._sorted_publisher = sorted(self._sorted_publisher, key=lambda x: x.next_scan)
         # get the ones with the "older" not handled publisher
 
         candidates = []
@@ -382,13 +382,12 @@ class NetatmoDataHandler:
             target = min(self._initial_hourly_rate_limit, int(target))
 
         if self._adjusted_hourly_rate_limit is not None and force_adjust is False and target == self._adjusted_hourly_rate_limit:
-            #no need to adjust anything
+            # no need to adjust anything
             return
-
 
         if do_wait_scan_for_cph_to_target:
             # wait for a bit longer to reach 80% of the target cph to have 20% of room to breath
-            wait_time = self.get_wait_time_to_reach_targets(current, int(target*0.80))
+            wait_time = self.get_wait_time_to_reach_targets(current, int(target * 0.80))
         else:
             wait_time = 0
 
@@ -417,7 +416,7 @@ class NetatmoDataHandler:
 
         if delta > len(self.rolling_hour):
             # just wait for the full cleaning of the rolling one
-            return 3600 + 2*self._scan_interval
+            return 3600 + 2 * self._scan_interval
         else:
             t_stop = self.rolling_hour[delta - 1]
 
@@ -437,7 +436,7 @@ class NetatmoDataHandler:
         num_call = max(0, min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - cph_init))
 
         if num_call > 0:
-            delta_sleep = self._scan_interval / (3.0*num_call)
+            delta_sleep = self._scan_interval / (3.0 * num_call)
         else:
             _LOGGER.info("Getting 0 approved calls: adjusted limit : %f current cph: %i",
                          self._adjusted_hourly_rate_limit, self.get_current_call_per_hour())
@@ -464,7 +463,7 @@ class NetatmoDataHandler:
                     _LOGGER.debug("Error on publisher: %s, num_errors: %i",
                                   publisher, data_class.num_consecutive_errors)
                     # Try again a bit later, this is not a rate limit
-                    data_class.next_scan = current + self._scan_interval #*(data_class.num_consecutive_errors + 1)
+                    data_class.next_scan = current + self._scan_interval  # *(data_class.num_consecutive_errors + 1)
                 else:
                     self.publisher[publisher].push_emission(current)
                     self.publisher[publisher].set_next_randomized_scan(current)
@@ -500,7 +499,6 @@ class NetatmoDataHandler:
                     # what we went down in case of issue (so here 10% up)
                     self.adjust_intervals_to_target(new_target, force_adjust=True, redo_next_scan=False)
                     self._last_cph_change = current
-
 
     @callback
     def async_force_update(self, signal_name: str) -> None:
@@ -566,11 +564,11 @@ class NetatmoDataHandler:
         return has_error, has_throttling_error
 
     async def subscribe(
-        self,
-        publisher: str,
-        signal_name: str,
-        update_callback: CALLBACK_TYPE | None,
-        **kwargs: Any,
+            self,
+            publisher: str,
+            signal_name: str,
+            update_callback: CALLBACK_TYPE | None,
+            **kwargs: Any,
     ) -> None:
         await self.subscribe_with_target(publisher=publisher,
                                          signal_name=signal_name,
@@ -580,13 +578,13 @@ class NetatmoDataHandler:
                                          **kwargs)
 
     async def subscribe_with_target(
-        self,
-        publisher: str,
-        signal_name: str,
-        target: Any,
-        update_callback: CALLBACK_TYPE | None,
-        update_only=False,
-        **kwargs: Any
+            self,
+            publisher: str,
+            signal_name: str,
+            target: Any,
+            update_callback: CALLBACK_TYPE | None,
+            update_only=False,
+            **kwargs: Any
     ) -> None:
         """Subscribe to publisher."""
         if signal_name in self.publisher:
@@ -606,7 +604,7 @@ class NetatmoDataHandler:
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
-            next_scan=time() + interval//2, #start sooner at start to get some data points
+            next_scan=time() + interval // 2,  # start sooner at start to get some data points
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
@@ -629,7 +627,7 @@ class NetatmoDataHandler:
         _LOGGER.debug("Publisher %s added", signal_name)
 
     async def unsubscribe(
-        self, signal_name: str, update_callback: CALLBACK_TYPE | None
+            self, signal_name: str, update_callback: CALLBACK_TYPE | None
     ) -> None:
         """Unsubscribe from publisher."""
         if update_callback not in self.publisher[signal_name].subscriptions:
@@ -693,8 +691,8 @@ class NetatmoDataHandler:
                 NETATMO_CREATE_CAMERA,
                 NETATMO_CREATE_CAMERA_LIGHT,
             ],
-            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT, NETATMO_CREATE_SENSOR,  NETATMO_CREATE_ENERGY],
-            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER, NETATMO_CREATE_SENSOR,  NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
             NetatmoDeviceCategory.switch: [
                 NETATMO_CREATE_LIGHT,
                 NETATMO_CREATE_SWITCH,
@@ -772,7 +770,7 @@ class NetatmoDataHandler:
                     )
 
     def setup_climate_schedule_select(
-        self, home: pyatmo.Home, signal_home: str
+            self, home: pyatmo.Home, signal_home: str
     ) -> None:
         """Set up climate schedule per home."""
         if NetatmoDeviceCategory.climate in [

@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo camera light platform."""
 
@@ -113,9 +113,9 @@ class NetatmoCameraLight(NetatmoModuleEntity, LightEntity):
             return
 
         if (
-            data["home_id"] == self.home.entity_id
-            and data["camera_id"] == self.device.entity_id
-            and data[WEBHOOK_PUSH_TYPE] == WEBHOOK_LIGHT_MODE
+                data["home_id"] == self.home.entity_id
+                and data["camera_id"] == self.device.entity_id
+                and data[WEBHOOK_PUSH_TYPE] == WEBHOOK_LIGHT_MODE
         ):
             self._attr_is_on = bool(data["sub_type"] == "on")
 

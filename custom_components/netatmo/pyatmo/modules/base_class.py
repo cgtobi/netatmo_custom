@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import bisect
+import logging
 from abc import ABC
 from collections.abc import Iterable
 from dataclasses import dataclass
-import logging
 from operator import itemgetter
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 from time import time
 
 LOG = logging.getLogger(__name__)
-
 
 NETATMO_ATTRIBUTES_MAP = {
     "entity_id": lambda x, y: x.get("id", y),
@@ -60,7 +59,7 @@ class EntityBase:
 
 
 # 2 days of dynamic historical data stored
-MAX_HISTORY_TIME_S = 24*2*3600
+MAX_HISTORY_TIME_S = 24 * 2 * 3600
 
 
 class NetatmoBase(EntityBase, ABC):
@@ -80,9 +79,9 @@ class NetatmoBase(EntityBase, ABC):
         self._update_attributes(raw_data)
 
         if (
-            self.bridge
-            and self.bridge in self.home.modules
-            and getattr(self, "device_category") == "weather"
+                self.bridge
+                and self.bridge in self.home.modules
+                and getattr(self, "device_category") == "weather"
         ):
             self.name = update_name(self.name, self.home.modules[self.bridge].name)
 
@@ -122,6 +121,7 @@ class NetatmoBase(EntityBase, ABC):
                     hist_f.pop(0)
 
     def get_history_data(self, feature: str, from_ts: int, to_ts: int | None = None):
+        """Retrieve historical data."""
 
         hist_f = self.history_features_values.get(feature, [])
 
@@ -169,8 +169,8 @@ class Place:
     location: Location | None
 
     def __init__(
-        self,
-        data: dict[str, Any],
+            self,
+            data: dict[str, Any],
     ) -> None:
         """Initialize self."""
 

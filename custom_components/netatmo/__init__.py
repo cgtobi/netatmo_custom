@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from http import HTTPStatus
 import logging
 import secrets
+from http import HTTPStatus
 from typing import Any
 
 import aiohttp
+
 try:
     from . import pyatmo
 except Exception:  # pylint: disable=broad-except
@@ -97,9 +98,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except aiohttp.ClientResponseError as ex:
         _LOGGER.warning("API error: %s (%s)", ex.status, ex.message)
         if ex.status in (
-            HTTPStatus.BAD_REQUEST,
-            HTTPStatus.UNAUTHORIZED,
-            HTTPStatus.FORBIDDEN,
+                HTTPStatus.BAD_REQUEST,
+                HTTPStatus.UNAUTHORIZED,
+                HTTPStatus.FORBIDDEN,
         ):
             raise ConfigEntryAuthFailed("Token not valid, trigger renewal") from ex
         raise ConfigEntryNotReady from ex
@@ -123,7 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await data_handler.async_setup()
 
     async def unregister_webhook(
-        _: Any,
+            _: Any,
     ) -> None:
         if CONF_WEBHOOK_ID not in entry.data:
             return
@@ -142,7 +143,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
     async def register_webhook(
-        _: Any,
+            _: Any,
     ) -> None:
         if CONF_WEBHOOK_ID not in entry.data:
             data = {**entry.data, CONF_WEBHOOK_ID: secrets.token_hex()}
@@ -278,7 +279,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_remove_config_entry_device(
-    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
+        hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
 ) -> bool:
     """Remove a config entry from a device."""
     data = hass.data[DOMAIN][config_entry.entry_id][DATA_HANDLER]

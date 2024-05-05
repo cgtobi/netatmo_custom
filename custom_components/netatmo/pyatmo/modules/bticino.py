@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from ..modules.module import Dimmer, Module, Shutter, Switch, OffloadMixin
+from ..modules.module import Dimmer, Module, OffloadMixin, Shutter, Switch
 
 LOG = logging.getLogger(__name__)
 

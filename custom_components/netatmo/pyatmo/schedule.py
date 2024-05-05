@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .const import RawData, SCHEDULE_TYPE_THERM, SCHEDULE_TYPE_EVENT, SCHEDULE_TYPE_ELECTRICITY, \
-    SCHEDULE_TYPE_COOLING
+from .const import (
+    SCHEDULE_TYPE_COOLING,
+    SCHEDULE_TYPE_ELECTRICITY,
+    SCHEDULE_TYPE_EVENT,
+    SCHEDULE_TYPE_THERM,
+    RawData,
+)
 from .modules.base_class import NetatmoBase
 from .room import Room
 
@@ -60,6 +65,7 @@ class ThermSchedule(ScheduleWithRealZones):
     hg_temp: float | None
 
     def __init__(self, home: Home, raw_data: RawData) -> None:
+        """Initialize ThermSchedule."""
         super().__init__(home, raw_data)
         self.hg_temp = raw_data.get("hg_temp")
         self.away_temp = raw_data.get("away_temp")
@@ -73,6 +79,7 @@ class CoolingSchedule(ThermSchedule):
     hg_temp: float | None
 
     def __init__(self, home: Home, raw_data: RawData) -> None:
+        """Initialize CoolingSchedule."""
         super().__init__(home, raw_data)
         self.cooling_away_temp = self.away_temp = raw_data.get("cooling_away_temp", self.away_temp)
 
@@ -88,9 +95,10 @@ class ElectricitySchedule(Schedule):
     zones: list[ZoneElectricity]
 
     def __init__(self, home: Home, raw_data: RawData) -> None:
+        """Initialize ElectricitySchedule."""
         super().__init__(home, raw_data)
         self.tariff = raw_data.get("tariff", "custom")
-        # Tariff option (basic = always the same price, peak_and_off_peak = peak & off peak hours)
+        # Tariff option (basic = always the same price, peak_and_off_peak = peak & offpeak hours)
         self.tariff_option = raw_data.get("tariff_option", "basic")
         self.power_threshold = raw_data.get("power_threshold", 6)
         self.contract_power_unit = raw_data.get("power_threshold", "kVA")
@@ -105,6 +113,7 @@ class EventSchedule(Schedule):
     timetable_sunset: list[TimetableEventEntry]
 
     def __init__(self, home: Home, raw_data: RawData) -> None:
+        """Initialize EventSchedule."""
         super().__init__(home, raw_data)
         self.timetable_sunrise = [
             TimetableEventEntry(home, r) for r in raw_data.get("timetable_sunrise", [])
@@ -146,6 +155,7 @@ class TimetableEventEntry:
 
 
 class ModuleSchedule(NetatmoBase):
+    """Class to represent a Netatmo schedule."""
 
     on: bool | None
     target_position: int | None
@@ -201,6 +211,8 @@ class ZoneElectricity(NetatmoBase):
 
 
 def schedule_factory(home: Home, raw_data: RawData) -> (Schedule, str):
+    """Create proper schedules."""
+
     schedule_type = raw_data.get("type", "custom")
     cls = {SCHEDULE_TYPE_THERM: ThermSchedule,
            SCHEDULE_TYPE_EVENT: EventSchedule,
