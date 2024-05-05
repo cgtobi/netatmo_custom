@@ -418,7 +418,7 @@ ENERGY_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
 
 
 async def async_setup_entry(
-        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the Netatmo sensor platform."""
 
@@ -563,9 +563,9 @@ class NetatmoWeatherSensor(NetatmoWeatherModuleEntity, SensorEntity):
     entity_description: NetatmoSensorEntityDescription
 
     def __init__(
-            self,
-            netatmo_device: NetatmoDevice,
-            description: NetatmoSensorEntityDescription,
+        self,
+        netatmo_device: NetatmoDevice,
+        description: NetatmoSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_device)
@@ -577,8 +577,8 @@ class NetatmoWeatherSensor(NetatmoWeatherModuleEntity, SensorEntity):
     def available(self) -> bool:
         """Return True if entity is available."""
         return (
-                self.device.reachable
-                or getattr(self.device, self.entity_description.netatmo_name) is not None
+            self.device.reachable
+            or getattr(self.device, self.entity_description.netatmo_name) is not None
         )
 
     @callback
@@ -643,9 +643,9 @@ class NetatmoBaseSensor(NetatmoModuleEntity, SensorEntity):
     _attr_configuration_url = CONF_URL_ENERGY
 
     def __init__(
-            self,
-            netatmo_device: NetatmoDevice,
-            description: NetatmoSensorEntityDescription,
+        self,
+        netatmo_device: NetatmoDevice,
+        description: NetatmoSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_device)
@@ -836,9 +836,9 @@ class NetatmoRoomSensor(NetatmoRoomEntity, SensorEntity):
     entity_description: NetatmoSensorEntityDescription
 
     def __init__(
-            self,
-            netatmo_room: NetatmoRoom,
-            description: NetatmoSensorEntityDescription,
+        self,
+        netatmo_room: NetatmoRoom,
+        description: NetatmoSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(netatmo_room)
@@ -875,10 +875,10 @@ class NetatmoPublicSensor(NetatmoBaseEntity, SensorEntity):
     entity_description: NetatmoPublicWeatherSensorEntityDescription
 
     def __init__(
-            self,
-            data_handler: NetatmoDataHandler,
-            area: NetatmoArea,
-            description: NetatmoPublicWeatherSensorEntityDescription,
+        self,
+        data_handler: NetatmoDataHandler,
+        area: NetatmoArea,
+        description: NetatmoPublicWeatherSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(data_handler)

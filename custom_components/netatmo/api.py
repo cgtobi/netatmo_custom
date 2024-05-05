@@ -34,9 +34,9 @@ class AsyncConfigEntryNetatmoAuth(pyatmo.AbstractAsyncAuth):
     """Provide Netatmo authentication tied to an OAuth2 based config entry."""
 
     def __init__(
-            self,
-            websession: ClientSession,
-            oauth_session: config_entry_oauth2_flow.OAuth2Session,
+        self,
+        websession: ClientSession,
+        oauth_session: config_entry_oauth2_flow.OAuth2Session,
     ) -> None:
         """Initialize the auth."""
         super().__init__(websession)

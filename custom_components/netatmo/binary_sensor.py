@@ -23,7 +23,7 @@ BINARY_SENSOR_TYPES: tuple[BinarySensorEntityDescription, ...] = (
 
 
 async def async_setup_entry(
-        hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Netatmo binary sensors based on a config entry."""
 
@@ -46,7 +46,7 @@ class NetatmoWeatherBinarySensor(NetatmoWeatherModuleEntity, BinarySensorEntity)
     """Implementation of a Netatmo binary sensor."""
 
     def __init__(
-            self, device: NetatmoDevice, description: BinarySensorEntityDescription
+        self, device: NetatmoDevice, description: BinarySensorEntityDescription
     ) -> None:
         """Initialize a Netatmo binary sensor."""
         super().__init__(device)

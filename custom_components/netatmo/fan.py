@@ -29,9 +29,9 @@ PRESETS = {v: k for k, v in PRESET_MAPPING.items()}
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Netatmo fan platform."""
 

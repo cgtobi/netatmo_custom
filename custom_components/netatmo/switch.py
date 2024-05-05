@@ -24,9 +24,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Netatmo switch platform."""
 
@@ -49,8 +49,8 @@ class NetatmoSwitch(NetatmoModuleEntity, SwitchEntity):
     device: NaModules.Switch
 
     def __init__(
-            self,
-            netatmo_device: NetatmoDevice,
+        self,
+        netatmo_device: NetatmoDevice,
     ) -> None:
         """Initialize the Netatmo device."""
         super().__init__(netatmo_device)

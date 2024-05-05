@@ -58,7 +58,7 @@ class NetatmoSource(MediaSource):
         return self._browse_media(source, camera_id, event_id)
 
     def _browse_media(
-            self, source: str, camera_id: str, event_id: int | None
+        self, source: str, camera_id: str, event_id: int | None
     ) -> BrowseMediaSource:
         """Browse media."""
         if camera_id and camera_id not in self.events:
@@ -70,7 +70,7 @@ class NetatmoSource(MediaSource):
         return self._build_item_response(source, camera_id, event_id)
 
     def _build_item_response(
-            self, source: str, camera_id: str, event_id: int | None = None
+        self, source: str, camera_id: str, event_id: int | None = None
     ) -> BrowseMediaSource:
         if event_id and event_id in self.events[camera_id]:
             created = dt.datetime.fromtimestamp(
@@ -141,7 +141,7 @@ def remove_html_tags(text: str) -> str:
 
 @callback
 def async_parse_identifier(
-        item: MediaSourceItem,
+    item: MediaSourceItem,
 ) -> tuple[str, str, int | None]:
     """Parse identifier."""
     if not item.identifier or "/" not in item.identifier:
