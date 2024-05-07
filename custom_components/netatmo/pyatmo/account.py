@@ -34,10 +34,12 @@ LOG = logging.getLogger(__name__)
 class AsyncAccount:
     """Async class of a Netatmo account."""
 
-    def __init__(self,
-                 auth: AbstractAsyncAuth,
-                 favorite_stations: bool = True,
-                 support_only_homes: list | None = None) -> None:
+    def __init__(
+        self,
+        auth: AbstractAsyncAuth,
+        favorite_stations: bool = True,
+        support_only_homes: list | None = None,
+    ) -> None:
         """Initialize the Netatmo account."""
 
         self.auth: AbstractAsyncAuth = auth
@@ -125,7 +127,8 @@ class AsyncAccount:
 
         if all_homes_ok is False:
             raise ApiHomeReachabilityError(
-                "No Home update could be performed, all modules unreachable and not updated", )
+                "No Home update could be performed, all modules unreachable and not updated",
+            )
 
         return num_calls
 
@@ -156,17 +159,19 @@ class AsyncAccount:
         return 1
 
     async def async_update_measures(
-            self,
-            home_id: str,
-            module_id: str,
-            start_time: int | None = None,
-            interval: MeasureInterval = MeasureInterval.HOUR,
-            days: int = 7,
-            end_time: int | None = None
+        self,
+        home_id: str,
+        module_id: str,
+        start_time: int | None = None,
+        interval: MeasureInterval = MeasureInterval.HOUR,
+        days: int = 7,
+        end_time: int | None = None,
     ) -> int:
         """Retrieve measures data from /getmeasure. Returns the number of performed API calls."""
 
-        num_calls = await getattr(self.homes[home_id].modules[module_id], "async_update_measures")(
+        num_calls = await getattr(
+            self.homes[home_id].modules[module_id], "async_update_measures"
+        )(
             start_time=start_time,
             end_time=end_time,
             interval=interval,
@@ -175,15 +180,15 @@ class AsyncAccount:
         return num_calls
 
     def register_public_weather_area(
-            self,
-            lat_ne: str,
-            lon_ne: str,
-            lat_sw: str,
-            lon_sw: str,
-            required_data_type: str | None = None,
-            filtering: bool = False,
-            *,
-            area_id: str = str(uuid4()),
+        self,
+        lat_ne: str,
+        lon_ne: str,
+        lat_sw: str,
+        lon_sw: str,
+        required_data_type: str | None = None,
+        filtering: bool = False,
+        *,
+        area_id: str = str(uuid4()),
     ) -> str:
         """Register public weather area to monitor."""
 
@@ -218,11 +223,11 @@ class AsyncAccount:
         return 1
 
     async def _async_update_data(
-            self,
-            endpoint: str,
-            params: dict[str, Any] | None = None,
-            tag: str = "devices",
-            area_id: str | None = None,
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        tag: str = "devices",
+        area_id: str | None = None,
     ) -> None:
         """Retrieve status data from <endpoint>."""
         resp = await self.auth.async_post_api_request(endpoint=endpoint, params=params)
@@ -249,15 +254,15 @@ class AsyncAccount:
         return 1
 
     async def update_devices(
-            self,
-            raw_data: RawData,
-            area_id: str | None = None,
+        self,
+        raw_data: RawData,
+        area_id: str | None = None,
     ) -> None:
         """Update device states."""
         for device_data in raw_data.get("devices", {}):
             if home_id := device_data.get(
-                    "home_id",
-                    self.find_home_of_device(device_data),
+                "home_id",
+                self.find_home_of_device(device_data),
             ):
                 if home_id not in self.homes:
                     modules_data = []
@@ -289,8 +294,8 @@ class AsyncAccount:
                 await self.update_devices({"devices": [module_data]})
 
             if (
-                    device_data["type"] == "NHC"
-                    or self.find_home_of_device(device_data) is None
+                device_data["type"] == "NHC"
+                or self.find_home_of_device(device_data) is None
             ):
                 device_data["name"] = device_data.get(
                     "station_name",
