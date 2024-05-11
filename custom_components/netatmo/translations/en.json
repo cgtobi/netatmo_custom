@@ -141,7 +141,7 @@
                     "weather_areas": "Weather areas"
                 },
                 "description": "Define the homes you want to support, Configure public weather sensors.",
-                "title": "Home selection and Netatmo public weather sensor"
+                "title": "Homes selection and Netatmo public weather sensor"
             }
         }
     },
