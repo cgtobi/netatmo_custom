@@ -1,5 +1,5 @@
 colorlog==6.7.0
-homeassistant==2024.4.3
+homeassistant==2024.5.4
 pip
 ruff==0.0.292
 aiohttp
