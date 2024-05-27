@@ -645,13 +645,6 @@ class NetatmoBaseSensor(NetatmoModuleEntity, SensorEntity):
             f"{self.device.entity_id}-{self.device.entity_id}-{description.key}"
         )
 
-        if description.device_class is None or description.device_class == SensorDeviceClass.ENUM:
-            name = self.entity_description.name
-            if name is None:
-                name = self.entity_description.key
-
-            self._attr_name = f"{self.device.name} {name}"
-
         self.complement_publishers(netatmo_device)
 
     @abstractmethod
