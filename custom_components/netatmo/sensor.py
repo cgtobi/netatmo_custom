@@ -714,7 +714,6 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
         self.device.reset_measures()
         self._current_start_anchor = datetime.now()
-        self.next_need_reset = False
         self.device.in_reset = False
         self._last_val_sent = None
 
@@ -735,7 +734,12 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         )
 
     def update_measures_num_calls(self):
-        if self.next_need_reset is True:
+
+        #check if the next call will result in 0 API call as it will be a reset
+        # netatmo is only keeping energy measures for 2.5 days, we reset every day
+        end = datetime.now()
+        start = self._current_start_anchor
+        if end.day != start.day:
             return 0
 
         if isinstance(self.device, EnergyHistoryMixin):
@@ -743,66 +747,40 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
         return 1
 
-    # to be called on the object itself
-
-    # doing this allows to have a clen reboot of the system without loosing anything
-    def _compute_current_anchor_point(self, current):
-
-        # now energy for 30mn or 1h can be only probed for 2.5 days ...hence reset every days
-        return datetime(current.year, current.month, current.day)
-
     async def async_update_energy(self, **kwargs):
 
         if isinstance(self.device, EnergyHistoryMixin) is False:
             return 0
 
-        if self.next_need_reset:
-            # value reset to 0 for a cycle vs what was asked before, next time we come here we will go in the next else
+        end = datetime.now()
+        start = self._current_start_anchor
+
+        #netatmo is only keeping energy measures for 2.5 days, we reset every day
+        if end.day != start.day:
+            #force everything at 0
             self.device.reset_measures()
-            self.next_need_reset = False
-            # leave self._last_end so it is a "point" update, next time the measure will be done at the former last_end
+            self._current_start_anchor = end
             return 0
-        else:
-            end = datetime.now()
-            start = self._current_start_anchor
 
-            self.next_need_reset = False
-            if end.day != start.day:
-                self.next_need_reset = True
+        end_time = int(end.timestamp())
+        start_time = int(start.timestamp())
 
-            if self.next_need_reset:
-                # compute the next possible start properly
-                self._current_start_anchor = self._compute_current_anchor_point(end)
-                end = self._current_start_anchor
-
-            end_time = int(end.timestamp())
-            start_time = int(start.timestamp())
-
-            num_calls = await self.device.async_update_measures(start_time=start_time,
-                                                                end_time=end_time,
-                                                                interval=MeasureInterval.HALF_HOUR)
-            # let the subsequent callback update the state energy data  and the availability
-            return num_calls
+        num_calls = await self.device.async_update_measures(start_time=start_time,
+                                                            end_time=end_time,
+                                                            interval=MeasureInterval.HALF_HOUR)
+        # let the subsequent callback update the state energy data  and the availability
+        return num_calls
 
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
 
-        if self.next_need_reset is True and self._current_start_anchor is not None:
-            to_ts = int(self._current_start_anchor.timestamp())
-        else:
-            to_ts = None
-
-        if isinstance(self.device, EnergyHistoryMixin):
-            v, delta_energy = self.device.get_sum_energy_elec_power_adapted(to_ts=to_ts, conservative=False)
-        else:
-            v = None
-            delta_energy = 0
-
-        if v is None:
+        if isinstance(self.device, EnergyHistoryMixin) is False:
+            #please the linter ....
             return
 
         if self.device.in_reset is False:
+            v, delta_energy = self.device.get_sum_energy_elec_power_adapted(conservative=False)
             new_val = v + delta_energy
             prev_energy = self._last_val_sent
             if prev_energy is not None and prev_energy > new_val:
@@ -811,8 +789,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
             _LOGGER.debug("UPDATE ENERGY FOR: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s",
                           self.device.name, delta_energy, v, v + delta_energy, prev_energy, state)
         else:
-            state = v
-            _LOGGER.debug("RESET ENERGY FOR: %s RETAINED: %s", self.device.name, v)
+            state = 0
+            _LOGGER.debug("RESET ENERGY FOR: %s RETAINED: %s", self.device.name, 0)
 
         self._attr_available = True
         self._attr_native_value = state
