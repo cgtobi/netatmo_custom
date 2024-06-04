@@ -30,7 +30,7 @@ from .const import (
     CONF_PUBLIC_MODE,
     CONF_WEATHER_AREAS,
     DOMAIN,
-    CONF_HOMES,
+    CONF_DISABLED_HOMES,
     DATA_HANDLER,
 )
 
@@ -98,6 +98,7 @@ class NetatmoFlowHandler(
         return await super().async_oauth_create_entry(data)
 
 
+INTERMEDIATE_ENABLED_HOMES = "enabled_homes"
 class NetatmoOptionsFlowHandler(OptionsFlow):
     """Handle Netatmo options."""
 
@@ -106,7 +107,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
         self.options.setdefault(CONF_WEATHER_AREAS, {})
-        self.options.setdefault(CONF_HOMES, {})
+        self.options.setdefault(CONF_DISABLED_HOMES, [])
 
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         """Manage the Netatmo options."""
@@ -124,6 +125,21 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
             user_input[CONF_WEATHER_AREAS] = {
                 area: self.options[CONF_WEATHER_AREAS][area] for area in areas
             }
+
+
+            enabled_homes = user_input.pop(INTERMEDIATE_ENABLED_HOMES, [])
+
+            if enabled_homes:
+
+                homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes_id
+                disabled_homes = []
+                for hid in homes:
+                    if hid not in enabled_homes:
+                        disabled_homes.append(hid)
+
+                user_input[CONF_DISABLED_HOMES] = disabled_homes
+
+
             self.options.update(user_input)
             if new_client:
                 return await self.async_step_public_weather(
@@ -135,21 +151,24 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
         weather_areas = list(self.options[CONF_WEATHER_AREAS])
 
         schema = {}
-        homes = {}
 
-        acc_homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes
-
-        for home_id, home in acc_homes.items():
-            homes[home.entity_id] = home.name
+        homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes_id
 
         if len(homes) > 1:
-            l_homes = self.options.get(CONF_HOMES, [])
-            if len(l_homes) == 0:
-                l_homes = [hid for hid in homes]
+            l_disabled_homes = self.options.get(CONF_DISABLED_HOMES, [])
+
+            l_selected_homes = []
+            for hid in homes:
+                if hid not in l_disabled_homes:
+                    l_selected_homes.append(hid)
+
+            if len(l_selected_homes) == 0:
+                l_selected_homes = [hid for hid in homes]
+
             schema.update({
                 vol.Optional(
-                    CONF_HOMES,
-                    default=l_homes,
+                    INTERMEDIATE_ENABLED_HOMES,
+                    default=l_selected_homes,
                 ): cv.multi_select(homes),
 
             })

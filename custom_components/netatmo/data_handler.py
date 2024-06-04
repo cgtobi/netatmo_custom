@@ -58,7 +58,7 @@ from .const import (
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
-    CONF_HOMES,
+    CONF_DISABLED_HOMES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -269,35 +269,54 @@ class NetatmoDataHandler:
 
     async def async_setup(self) -> None:
 
-        homes = self.config_entry.options.get(CONF_HOMES, [])
+        disabled_homes = self.config_entry.options.get(CONF_DISABLED_HOMES, [])
 
-        self.account = pyatmo.AsyncAccount(self._auth, support_only_homes=homes)
+        self.account = pyatmo.AsyncAccount(self._auth)
 
-        num_calls = 0
+        #try to update topology as best as possible at start if we get some errors we can continue anyway
+        for i in range(5):
+            has_error = False
+            try:
+                num_calls = await self.account.async_update_topology(disabled_homes_ids=disabled_homes)
+                self.add_api_call(num_calls)
 
-        for method in ["async_update_topology", "async_update_status"]:
-            for i in range(5):
-                has_error = False
-                try:
-                    num_calls += await getattr(self.account, method)()
-                except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                    _LOGGER.debug("init account.%s error NoDevice or ApiError %s", method, err)
-                    has_error = True
-                except (TimeoutError, aiohttp.ClientConnectorError) as err:
-                    _LOGGER.debug("init account.%s error Timeout or ClientConnectorError: %s", method, err)
-                    has_error = True
-                except Exception as err:
-                    _LOGGER.debug("init account.%s error unknown %s", method, err)
-                    has_error = True
+            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
+                _LOGGER.debug("init account.async_update_topology error NoDevice or ApiError %s", err)
+                has_error = True
+            except (TimeoutError, aiohttp.ClientConnectorError) as err:
+                _LOGGER.debug("init account.async_update_topology error Timeout or ClientConnectorError: %s",  err)
+                has_error = True
+            except Exception as err:
+                _LOGGER.debug("init account.async_update_topology error unknown %s",  err)
+                has_error = True
 
-                if has_error is False:
-                    break
+            if has_error is False:
+                break
 
-                await asyncio.sleep(5)
+            await asyncio.sleep(5)
 
-        self.add_api_call(num_calls)
+        for i in range(5):
+            has_error = False
+            try:
+                num_calls = await self.account.async_update_status()
+                self.add_api_call(num_calls)
 
-        # adding this here to have the modules with their correct features, etc
+            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
+                _LOGGER.debug("init account.async_update_status error NoDevice or ApiError %s", err)
+                has_error = True
+            except (TimeoutError, aiohttp.ClientConnectorError) as err:
+                _LOGGER.debug("init account.async_update_status error Timeout or ClientConnectorError: %s", err)
+                has_error = True
+            except Exception as err:
+                _LOGGER.debug("init account.async_update_status error unknown %s", err)
+                has_error = True
+
+            if has_error is False:
+                break
+
+            await asyncio.sleep(5)
+
+
 
         # do update only as async_update_topology will call the APIS
         await self.subscribe_with_target(
@@ -770,7 +789,7 @@ class NetatmoDataHandler:
                     )
 
     def setup_climate_schedule_select(
-            self, home: pyatmo.Home, signal_home: str
+        self, home: pyatmo.Home, signal_home: str
     ) -> None:
         """Set up climate schedule per home."""
         if NetatmoDeviceCategory.climate in [

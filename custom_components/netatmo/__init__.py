@@ -50,7 +50,7 @@ from .const import (
     PLATFORMS,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_PUSH_TYPE,
-    CONF_HOMES
+    CONF_DISABLED_HOMES
 )
 from .data_handler import NetatmoDataHandler
 from .webhook import async_handle_webhook
@@ -229,7 +229,7 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
     homes = {}
     if account_home is not None and len(account_home) > 1:
 
-        homes = entry.options.get(CONF_HOMES, {})
+        homes = entry.options.get(CONF_DISABLED_HOMES, {})
 
         init = set(local_data_handler.account.support_only_homes)
         local_data_handler.account.update_supported_homes(support_only_homes=[h_id for h_id in homes])

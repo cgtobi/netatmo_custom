@@ -6,6 +6,11 @@
       "type": "shell",
       "command": "scripts/develop",
       "problemMatcher": []
+    },{
+      "label": "Prepare for run",
+      "type": "shell",
+      "command": "scripts/prepare",
+      "problemMatcher": []
     }
   ]
 }
