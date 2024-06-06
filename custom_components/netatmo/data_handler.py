@@ -112,8 +112,8 @@ CALL_PER_TEN_SECONDS = "CALL_PER_10S"
 SCAN_INTERVAL = "SCAN_INTERVAL"
 
 NETATMO_USER_CALL_LIMITS = {
-    CALL_PER_HOUR: 200,
-    CALL_PER_TEN_SECONDS: 2,  # 2 to comply with the global limit of (2 * number of users) requests every 10 seconds
+    CALL_PER_HOUR: 20,        # 20 to comply with the global limit of (20 * number of users) requests every hour
+    CALL_PER_TEN_SECONDS: 2,  # 2  to comply with the global limit of (2 * number of users) requests every 10 seconds
     ACCOUNT: 10800,
     HOME: 150,
     WEATHER: 600,
@@ -127,13 +127,13 @@ NETATMO_DEV_CALL_LIMITS = {
     CALL_PER_HOUR: 400,
     CALL_PER_TEN_SECONDS: 20,
     ACCOUNT: 3600,
-    HOME: 8,
+    HOME: 5,
     WEATHER: 200,
     AIR_CARE: 100,
     PUBLIC: 200,
     EVENT: 200,
     ENERGY_MEASURE: 900,
-    SCAN_INTERVAL: 10
+    SCAN_INTERVAL: 6
 }
 
 CPH_ADJUSTEMENT_DOWN = 0.8
