@@ -124,8 +124,8 @@ NETATMO_USER_CALL_LIMITS = {
     SCAN_INTERVAL: 60
 }
 NETATMO_DEV_CALL_LIMITS = {
-    CALL_PER_HOUR: 400,
-    CALL_PER_TEN_SECONDS: 20,
+    CALL_PER_HOUR: 400,       # in this case per user limit is: 500 requests every hour
+    CALL_PER_TEN_SECONDS: 40, # in this case per user limit is: 50 requests every 10 seconds
     ACCOUNT: 3600,
     HOME: 5,
     WEATHER: 200,
