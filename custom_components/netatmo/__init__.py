@@ -223,17 +223,20 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
 
     local_data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    account_home = local_data_handler.account.all_account_homes
+    account_home = local_data_handler.account.all_account_homes_id
 
     do_reload = False
-    homes = {}
+
     if account_home is not None and len(account_home) > 1:
-
-        homes = entry.options.get(CONF_DISABLED_HOMES, {})
-
-        init = set(local_data_handler.account.support_only_homes)
-        local_data_handler.account.update_supported_homes(support_only_homes=[h_id for h_id in homes])
-        if init != set(local_data_handler.account.support_only_homes):
+        disabled_homes = entry.options.get(CONF_DISABLED_HOMES, {})
+        enabled_homes = {
+            home_id for home_id in account_home if home_id not in disabled_homes
+        }   
+        homes = local_data_handler.account.homes # it can have more homes, the public ones
+        current_homes = {
+            home_id for home_id in homes if home_id in account_home
+        }
+        if current_homes != enabled_homes:
             do_reload = True
 
     if do_reload is False:
