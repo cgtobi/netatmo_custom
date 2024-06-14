@@ -1,9 +1,9 @@
 {
   "domain": "netatmo",
   "name": "Netatmo",
-  "version": "2024.04.18",
+  "version": "2024.06.14",
   "after_dependencies": ["cloud", "media_source"],
-  "codeowners": ["@cgtobi"],
+  "codeowners": ["@cgtobi", "@tmenguy"],
   "config_flow": true,
   "dependencies": ["application_credentials", "webhook"],
   "documentation": "https://www.home-assistant.io/integrations/netatmo",
