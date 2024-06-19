@@ -625,7 +625,7 @@ class EnergyHistoryMixin(EntityBase):
         """Compute energy from power with a rieman sum."""
 
         delta_energy = 0
-        if len(power_data) > 1:
+        if power_data and len(power_data) > 1:
 
             # compute a rieman sum, as best as possible , trapezoidal, taking pessimistic asumption
             # as we don't want to artifically go up the previous one
