@@ -124,8 +124,8 @@ NETATMO_USER_CALL_LIMITS = {
     SCAN_INTERVAL: 60
 }
 NETATMO_DEV_CALL_LIMITS = {
-    CALL_PER_HOUR: 400,       # in this case per user limit is: 500 requests every hour
-    CALL_PER_TEN_SECONDS: 40, # in this case per user limit is: 50 requests every 10 seconds
+    CALL_PER_HOUR: 450,       # in this case per user limit is: 500 requests every hour
+    CALL_PER_TEN_SECONDS: 45, # in this case per user limit is: 50 requests every 10 seconds
     ACCOUNT: 3600,
     HOME: 5,
     WEATHER: 200,
@@ -614,8 +614,11 @@ class NetatmoDataHandler:
         if target is None:
             target = self.account
 
-        if publisher == "public":
+        if publisher == PUBLIC:
             kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
+        elif publisher == ACCOUNT:
+            kwargs = {"disabled_homes_ids": self.config_entry.options.get(CONF_DISABLED_HOMES, []) }
+
 
         interval = int(self._limits[publisher])
         # n = len(self._sorted_publisher)
