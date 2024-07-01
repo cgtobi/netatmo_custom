@@ -1111,7 +1111,7 @@ class Module(NetatmoBase):
         self.update_features()
 
         #Hack for Iznogood, to be removed
-        if self.reachable is None and not self.modules and self.bridge:
+        if not self.reachable and raw_data.get("type") == "NLE" and not self.modules and self.bridge:
             self.reachable = True
 
         if not self.reachable and self.modules:
