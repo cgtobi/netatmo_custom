@@ -1110,6 +1110,10 @@ class Module(NetatmoBase):
         self.update_topology(raw_data)
         self.update_features()
 
+        #Hack for Iznogood, to be removed
+        if self.reachable is None and not self.modules and self.bridge:
+            self.reachable = True
+
         if not self.reachable and self.modules:
             # Update bridged modules and associated rooms
             for module_id in self.modules:
