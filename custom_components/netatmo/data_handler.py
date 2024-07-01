@@ -133,7 +133,7 @@ NETATMO_DEV_CALL_LIMITS = {
     PUBLIC: 200,
     EVENT: 200,
     ENERGY_MEASURE: 900,
-    SCAN_INTERVAL: 6
+    SCAN_INTERVAL: 5
 }
 
 CPH_ADJUSTEMENT_DOWN = 0.8
@@ -212,7 +212,7 @@ class NetatmoPublisher:
         self.next_scan = ts + self.interval + wait_time
 
     def is_ts_allows_emission(self, ts):
-        return self.next_scan < ts + max(self.data_handler._scan_interval, self.interval // 12)
+        return self.next_scan <= ts # + max(self.data_handler._scan_interval, self.interval // 12)
 
 
 class NetatmoDataHandler:
