@@ -205,15 +205,11 @@ class NetatmoPublisher:
     def push_emission(self, ts):
         self.num_consecutive_errors = 0
 
-    def set_next_randomized_scan(self, ts, wait_time=0):
-
-        if getattr(self.target, "next_need_reset", False) is True:
-            # if there is a reset ask : met it assap and so short
-            self.next_scan = ts + max(wait_time, self.data_handler._scan_interval)
-        else:
-            rand_delta = int(self.interval // 8)
-            rnd = random.randint(0 - rand_delta, rand_delta)
-            self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
+    def set_next_scan(self, ts, wait_time=0):
+        #rand_delta = int(self.interval // 8)
+        #rnd = random.randint(0 - rand_delta, rand_delta)
+        #self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
+        self.next_scan = ts + self.interval + wait_time
 
     def is_ts_allows_emission(self, ts):
         return self.next_scan < ts + max(self.data_handler._scan_interval, self.interval // 12)
@@ -421,8 +417,9 @@ class NetatmoDataHandler:
 
             for p in self._sorted_publisher:
                 p.interval = int((p.interval * ctph) / target) + 1
-                if redo_next_scan:
-                    p.set_next_randomized_scan(current, wait_time=wait_time)
+
+            if redo_next_scan:
+                self._spread_next_scans(wait_time=wait_time)
 
         self.adjust_per_scan_numbers()
 
@@ -485,7 +482,7 @@ class NetatmoDataHandler:
                     data_class.next_scan = current + self._scan_interval  # *(data_class.num_consecutive_errors + 1)
                 else:
                     self.publisher[publisher].push_emission(current)
-                    self.publisher[publisher].set_next_randomized_scan(current)
+                    self.publisher[publisher].set_next_scan(current)
 
             if delta_sleep > 0:
                 await asyncio.sleep(delta_sleep)
@@ -647,6 +644,28 @@ class NetatmoDataHandler:
 
         self._sorted_publisher.append(self.publisher[signal_name])
         _LOGGER.debug("Publisher %s added", signal_name)
+        self._spread_next_scans()
+
+
+
+    def _spread_next_scans(self, wait_time=0):
+        intervals = {}
+        current = int(time())
+
+        for p in self._sorted_publisher:
+            if p.interval not in intervals:
+                intervals[p.interval] = [p]
+            else:
+                intervals[p.interval].append(p)
+
+        for interval, publishers in intervals.items():
+            if len(publishers) > 1:
+                for i, p in enumerate(publishers):
+                    p.next_scan = current + max(wait_time, 1) + int(i * interval // len(publishers))
+            else:
+                publishers[0].next_scan = current + max(wait_time, 1) + interval//2
+
+
 
     async def unsubscribe(
             self, signal_name: str, update_callback: CALLBACK_TYPE | None
