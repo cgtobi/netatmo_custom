@@ -644,6 +644,8 @@ class NetatmoDataHandler:
 
         self._sorted_publisher.append(self.publisher[signal_name])
         _LOGGER.debug("Publisher %s added", signal_name)
+
+        #do spread each time, not very efficient but done only at start
         self._spread_next_scans()
 
 
