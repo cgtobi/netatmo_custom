@@ -238,8 +238,10 @@ class Home:
             and has_one_module_reachable is False
             and has_an_update is False
         ):
+            LOG.debug("IZNOGOOD: Can't update Home with data: %s", raw_data)
             return False
 
+        LOG.debug("IZNOGOOD: Properly updated with data: %s", raw_data)
         return True
 
     def get_selected_schedule(self, schedule_type: str = None) -> Schedule | None:

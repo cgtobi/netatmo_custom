@@ -749,6 +749,13 @@ class NetatmoDataHandler:
             if not module.device_category:
                 continue
 
+            if NetatmoDeviceCategory.meter == module.device_category:
+                #for iznogood
+                if module.modules or module.bridge is None:
+                    _LOGGER.debug("IZNOGOOD: do not count %s (%s)", module.name, module.entity_id)
+                    continue
+
+
             for signal in netatmo_type_signal_map.get(module.device_category, []):
                 async_dispatcher_send(
                     self.hass,

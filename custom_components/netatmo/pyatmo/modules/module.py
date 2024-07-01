@@ -778,7 +778,7 @@ class EnergyHistoryMixin(EntityBase):
                 prev_sum_energy_elec if prev_sum_energy_elec is not None else "NOTHING",
             )
         else:
-
+            LOG.debug("IZNOGOOD: OK ENERGY %s", self.name)
             await self._prepare_exported_historical_data(
                 start_time,
                 end_time,
@@ -1055,6 +1055,8 @@ class EnergyHistoryMixin(EntityBase):
                 params=params,
             )
 
+            LOG.debug("IZNOGOOD: Call getmeasure %s %s", GETMEASURE_ENDPOINT, params)
+
             rw_dt_f = await resp.json()
             rw_dt = rw_dt_f.get("body")
 
@@ -1062,6 +1064,8 @@ class EnergyHistoryMixin(EntityBase):
                 self._log_energy_error(
                     start_time, end_time, msg=f"direct from {data_point}", body=rw_dt_f
                 )
+                LOG.debug("IZNOGOOD: BAD GET MEASURE %s", self.name)
+
                 raise ApiError(
                     f"Energy badly formed resp: {rw_dt_f} - "
                     f"module: {self.name} - "
@@ -1111,8 +1115,15 @@ class Module(NetatmoBase):
         self.update_features()
 
         #Hack for Iznogood, to be removed
-        if not self.reachable and raw_data.get("type") == "NLE" and not self.modules and self.bridge:
-            self.reachable = True
+        if (raw_data.get("type") == "NLE" or self.device_type == DeviceType.NLE ):
+
+            if self.bridge:
+                LOG.debug("IZNOGOOD: FORCING AN NLE WITH BRIDGE REACHABLE %s (%s)", self.name, self.entity_id)
+                self.reachable = True
+            else:
+                LOG.debug("IZNOGOOD: FORCING AN NLE NO BRIDGE NOT REACHABLE %s (%s)", self.name, self.entity_id)
+                self.reachable = False
+
 
         if not self.reachable and self.modules:
             # Update bridged modules and associated rooms
