@@ -1038,6 +1038,15 @@ class EnergyHistoryMixin(EntityBase):
     async def _energy_API_calls(self, start_time, end_time, interval):
         num_calls = 0
         data_points = self.home.energy_endpoints
+
+        bridge_module = self.home.modules.get(self.bridge)
+        if bridge_module:
+            if bridge_module.device_type == DeviceType.NLE:
+                LOG.debug("IZNOGOOD: USE OLD ENDPOINT_PROPERLY")
+                data_points =self.home.energy_endpoints_old
+        data_points = self.home.energy_endpoints_old #forece for iznogood ...
+
+
         raw_datas = []
         for data_point in data_points:
 
