@@ -749,10 +749,9 @@ class NetatmoDataHandler:
             if not module.device_category:
                 continue
 
-            if NetatmoDeviceCategory.meter == module.device_category:
-                #for iznogood
+            if module.device_category == NetatmoDeviceCategory.meter:
+                # if we have an ecocounter as bridge, do not add its sensors
                 if module.modules or module.bridge is None:
-                    _LOGGER.debug("IZNOGOOD: do not count %s (%s)", module.name, module.entity_id)
                     continue
 
 
