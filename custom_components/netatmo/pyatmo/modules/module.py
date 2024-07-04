@@ -406,21 +406,32 @@ class FanSpeedMixin(EntityBase):
 class ShutterMixin(EntityBase):
     """Mixin for shutter data."""
 
+    __open_position = 100
+    __close_position = 0
+    __stop_position = -1
+    __preferred_position = -2
+
     def __init__(self, home: Home, module: ModuleT):
         """Initialize shutter mixin."""
 
         super().__init__(home, module)  # type: ignore # mypy issue 4335
         self.current_position: int | None = None
         self.target_position: int | None = None
+        self.target_position__step: int | None = None
 
     async def async_set_target_position(self, target_position: int) -> bool:
         """Set shutter to target position."""
+
+        # in case of a too low value, we default to stop and not the preferred position
+        # We check against __preferred_position that is the lower known value
+        if target_position < self.__preferred_position:
+            target_position = self.__stop_position
 
         json_roller_shutter = {
             "modules": [
                 {
                     "id": self.entity_id,
-                    "target_position": max(min(100, target_position), -1),
+                    "target_position": min(self.__open_position, target_position),
                     "bridge": self.bridge,
                 },
             ],
@@ -430,17 +441,22 @@ class ShutterMixin(EntityBase):
     async def async_open(self) -> bool:
         """Open shutter."""
 
-        return await self.async_set_target_position(100)
+        return await self.async_set_target_position(self.__open_position)
 
     async def async_close(self) -> bool:
         """Close shutter."""
 
-        return await self.async_set_target_position(0)
+        return await self.async_set_target_position(self.__close_position)
 
     async def async_stop(self) -> bool:
         """Stop shutter."""
 
-        return await self.async_set_target_position(-1)
+        return await self.async_set_target_position(self.__stop_position)
+
+    async def async_move_to_preferred_position(self) -> bool:
+        """Move shutter to preferred position."""
+
+        return await self.async_set_target_position(self.__preferred_position)
 
 
 class CameraMixin(EntityBase):
@@ -778,7 +794,7 @@ class EnergyHistoryMixin(EntityBase):
                 prev_sum_energy_elec if prev_sum_energy_elec is not None else "NOTHING",
             )
         else:
-            LOG.debug("IZNOGOOD: OK ENERGY %s", self.name)
+
             await self._prepare_exported_historical_data(
                 start_time,
                 end_time,
@@ -1039,13 +1055,11 @@ class EnergyHistoryMixin(EntityBase):
         num_calls = 0
         data_points = self.home.energy_endpoints
 
+        # when the bridge is a connected meter, use old endpoints
         bridge_module = self.home.modules.get(self.bridge)
         if bridge_module:
             if bridge_module.device_type == DeviceType.NLE:
-                LOG.debug("IZNOGOOD: USE OLD ENDPOINT_PROPERLY")
                 data_points =self.home.energy_endpoints_old
-        data_points = self.home.energy_endpoints_old #forece for iznogood ...
-
 
         raw_datas = []
         for data_point in data_points:
@@ -1064,8 +1078,6 @@ class EnergyHistoryMixin(EntityBase):
                 params=params,
             )
 
-            LOG.debug("IZNOGOOD: Call getmeasure %s %s", GETMEASURE_ENDPOINT, params)
-
             rw_dt_f = await resp.json()
             rw_dt = rw_dt_f.get("body")
 
@@ -1073,8 +1085,6 @@ class EnergyHistoryMixin(EntityBase):
                 self._log_energy_error(
                     start_time, end_time, msg=f"direct from {data_point}", body=rw_dt_f
                 )
-                LOG.debug("IZNOGOOD: BAD GET MEASURE %s", self.name)
-
                 raise ApiError(
                     f"Energy badly formed resp: {rw_dt_f} - "
                     f"module: {self.name} - "
@@ -1123,15 +1133,17 @@ class Module(NetatmoBase):
         self.update_topology(raw_data)
         self.update_features()
 
-        #Hack for Iznogood, to be removed
-        if (raw_data.get("type") == "NLE" or self.device_type == DeviceType.NLE ):
-
+        # If we have an NLE as a bridge all its bridged modules will have to be reachable
+        if self.device_type == DeviceType.NLE:
+            # if there is a bridge it means it is a leaf
             if self.bridge:
-                LOG.debug("IZNOGOOD: FORCING AN NLE WITH BRIDGE REACHABLE %s (%s)", self.name, self.entity_id)
-                self.reachable = True
-            else:
-                LOG.debug("IZNOGOOD: FORCING AN NLE NO BRIDGE NOT REACHABLE %s (%s)", self.name, self.entity_id)
-                self.reachable = False
+                bridge_module = self.home.modules.get(self.bridge)
+                if bridge_module:
+                    if bridge_module.device_type == DeviceType.NLE:
+                        self.reachable = True
+            elif self.modules:
+              # this NLE is a bridge itself : make it not available
+              self.reachable = False
 
 
         if not self.reachable and self.modules:
