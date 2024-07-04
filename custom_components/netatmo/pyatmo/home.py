@@ -108,6 +108,7 @@ class Home:
             if type_tariff == "peak_and_off_peak" and len(zones) >= 2:
 
                 self.energy_endpoints = [None, None]
+                self.energy_endpoints_old = [None, None]
 
                 self.energy_endpoints[ENERGY_ELEC_PEAK_IDX] = (
                     MeasureType.SUM_ENERGY_ELEC_PEAK.value
