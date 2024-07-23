@@ -16,8 +16,8 @@ try:
     from . import pyatmo
     from .pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
-        DeviceType as NetatmoDeviceType,
-    )
+        DeviceType as NetatmoDeviceType, DeviceType,
+)
 except Exception:  # pylint: disable=broad-except
     import pyatmo
     from pyatmo.modules.device_types import (
@@ -750,9 +750,29 @@ class NetatmoDataHandler:
                 continue
 
             if module.device_category == NetatmoDeviceCategory.meter:
-                # if we have an ecocounter as bridge, do not add its sensors
-                if module.modules or module.bridge is None:
-                    continue
+
+                if module.device_type == DeviceType.NLE:
+                    if module.modules or module.bridge is None:
+                        # if we have an ecocounter as bridge, do not add its sensors as it is only its owned modules
+                        # that are sporting the real sensors wiht power and energy .... except that power is not
+                        # available in the case of this kind of ecocounter
+                        continue
+                    else:
+                        # if there is a bridge it means it is a leaf and should be kept...but only the electrical ones
+                        if module.bridge:
+                            name = module.entity_id
+                            sp = name.split("#")
+                            if len(sp) != 2:
+                                continue
+                            num = sp[1]
+                            try:
+                                num = int(num)
+                            except:
+                                continue
+
+                            if num > 5:
+                                continue
+                            #6 : GAZ #7: HOT WATER #8: COLD WATER
 
 
             for signal in netatmo_type_signal_map.get(module.device_category, []):

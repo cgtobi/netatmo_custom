@@ -705,7 +705,9 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         """Initialize the sensor."""
         super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
 
-        self.device.reset_measures()
+        if isinstance(self.device, EnergyHistoryMixin):
+            self.device.reset_measures()
+
         self._current_start_anchor = datetime.now()
         self.device.in_reset = False
         self._last_val_sent = None
