@@ -16,7 +16,7 @@ try:
     from .pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
         DeviceType as NetatmoDeviceType, DeviceType,
-)
+    )
 except Exception:  # pylint: disable=broad-except
     import pyatmo
     from pyatmo.modules.device_types import (
@@ -123,8 +123,8 @@ NETATMO_USER_CALL_LIMITS = {
     SCAN_INTERVAL: 60
 }
 NETATMO_DEV_CALL_LIMITS = {
-    CALL_PER_HOUR: 450,       # in this case per user limit is: 500 requests every hour
-    CALL_PER_TEN_SECONDS: 45, # in this case per user limit is: 50 requests every 10 seconds
+    CALL_PER_HOUR: 450,        # in this case per user limit is: 500 requests every hour
+    CALL_PER_TEN_SECONDS: 45,  # in this case per user limit is: 50 requests every 10 seconds
     ACCOUNT: 3600,
     HOME: 5,
     WEATHER: 200,
@@ -196,7 +196,7 @@ class NetatmoPublisher:
         self.num_consecutive_errors = 0
         self.data_handler = data_handler
 
-    def compute_num_API_calls(self):
+    def compute_num_api_calls(self):
         if self.target and self.method_num_call_probe is not None:
             return getattr(self.target, self.method_num_call_probe)()
         return 1
@@ -205,13 +205,13 @@ class NetatmoPublisher:
         self.num_consecutive_errors = 0
 
     def set_next_scan(self, ts, wait_time=0):
-        #rand_delta = int(self.interval // 8)
-        #rnd = random.randint(0 - rand_delta, rand_delta)
-        #self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
+        # rand_delta = int(self.interval // 8)
+        # rnd = random.randint(0 - rand_delta, rand_delta)
+        # self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
         self.next_scan = ts + self.interval + wait_time
 
     def is_ts_allows_emission(self, ts):
-        return self.next_scan <= ts # + max(self.data_handler._scan_interval, self.interval // 12)
+        return self.next_scan <= ts  # + max(self.data_handler._scan_interval, self.interval // 12)
 
 
 class NetatmoDataHandler:
@@ -268,7 +268,7 @@ class NetatmoDataHandler:
 
         self.account = pyatmo.AsyncAccount(self._auth)
 
-        #try to update topology as best as possible at start if we get some errors we can continue anyway
+        # try to update topology as best as possible at start if we get some errors we can continue anyway
         for i in range(5):
             has_error = False
             try:
@@ -311,8 +311,6 @@ class NetatmoDataHandler:
 
             await asyncio.sleep(5)
 
-
-
         # do update only as async_update_topology will call the APIS
         await self.subscribe_with_target(
             publisher=ACCOUNT,
@@ -346,7 +344,7 @@ class NetatmoDataHandler:
     def compute_theoretical_call_per_hour(self):
         num_cph = 0.0
         for p in self._sorted_publisher:
-            added_call = p.compute_num_API_calls()
+            added_call = p.compute_num_api_calls()
             num_cph += added_call * (3600.0 / p.interval)
 
         return num_cph
@@ -360,7 +358,7 @@ class NetatmoDataHandler:
         for p in self._sorted_publisher:
             if p.name is not None:
                 if p.is_ts_allows_emission(current):
-                    added_call = p.compute_num_API_calls()
+                    added_call = p.compute_num_api_calls()
                     if num_predicted_calls + added_call > n:
                         break
 
@@ -395,7 +393,8 @@ class NetatmoDataHandler:
         else:
             target = min(self._initial_hourly_rate_limit, int(target))
 
-        if self._adjusted_hourly_rate_limit is not None and force_adjust is False and target == self._adjusted_hourly_rate_limit:
+        if (self._adjusted_hourly_rate_limit is not None and force_adjust is False
+                and target == self._adjusted_hourly_rate_limit):
             # no need to adjust anything
             return
 
@@ -541,7 +540,7 @@ class NetatmoDataHandler:
 
         if update_only is False:
 
-            num_fetch = self.publisher[signal_name].compute_num_API_calls()
+            num_fetch = self.publisher[signal_name].compute_num_api_calls()
             try:
                 num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                     **self.publisher[signal_name].kwargs
@@ -613,8 +612,7 @@ class NetatmoDataHandler:
         if publisher == PUBLIC:
             kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
         elif publisher == ACCOUNT:
-            kwargs = {"disabled_homes_ids": self.config_entry.options.get(CONF_DISABLED_HOMES, []) }
-
+            kwargs = {"disabled_homes_ids": self.config_entry.options.get(CONF_DISABLED_HOMES, [])}
 
         interval = int(self._limits[publisher])
         # n = len(self._sorted_publisher)
@@ -644,10 +642,8 @@ class NetatmoDataHandler:
         self._sorted_publisher.append(self.publisher[signal_name])
         _LOGGER.debug("Publisher %s added", signal_name)
 
-        #do spread each time, not very efficient but done only at start
+        # do spread each time, not very efficient but done only at start
         self._spread_next_scans()
-
-
 
     def _spread_next_scans(self, wait_time=0):
         intervals = {}
@@ -771,8 +767,7 @@ class NetatmoDataHandler:
 
                             if num > 5:
                                 continue
-                            #6 : GAZ #7: HOT WATER #8: COLD WATER
-
+                            # #6 : GAZ #7: HOT WATER #8: COLD WATER
 
             for signal in netatmo_type_signal_map.get(module.device_category, []):
                 async_dispatcher_send(

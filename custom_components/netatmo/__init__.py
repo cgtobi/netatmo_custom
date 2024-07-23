@@ -226,6 +226,7 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
     account_home = local_data_handler.account.all_account_homes_id
 
     do_reload = False
+    homes = []
 
     if account_home is not None and len(account_home) > 1:
         disabled_homes = entry.options.get(CONF_DISABLED_HOMES, {})
@@ -243,7 +244,6 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
         # nothing to change here check for the public
         async_dispatcher_send(hass, f"signal-{DOMAIN}-public-update-{entry.entry_id}")
     else:
-
         _LOGGER.debug("Called reload because of supported homes changes %s", homes)
         _reset_hass_domain(hass)
         await hass.config_entries.async_reload(entry.entry_id)
