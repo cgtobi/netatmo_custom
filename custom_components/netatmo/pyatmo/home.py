@@ -25,7 +25,6 @@ from .modules import Module
 from .person import Person
 from .room import Room
 from .schedule import Schedule
-from .modules.module import MeasureType
 
 if TYPE_CHECKING:
     from .auth import AbstractAsyncAuth
