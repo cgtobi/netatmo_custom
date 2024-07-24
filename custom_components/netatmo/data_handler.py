@@ -57,7 +57,7 @@ from .const import (
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
-    CONF_DISABLED_HOMES,
+    CONF_DISABLED_HOMES, NETATMO_CREATE_GAS, NETATMO_CREATE_WATER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,10 +79,6 @@ PUBLISHERS = {
     PUBLIC: "async_update_public_weather",
     EVENT: "async_update_events",
     ENERGY_MEASURE: "async_update_energy",
-}
-
-PUBLISHERS_CALL_PROBER = {
-    ENERGY_MEASURE: "update_measures_num_calls",
 }
 
 # Netatmo rate limiting: https://dev.netatmo.com/guideline
@@ -183,7 +179,7 @@ class NetatmoPublisher:
     num_consecutive_errors: int
     data_handler: NetatmoDataHandler
 
-    def __init__(self, name, interval, next_scan, target, subscriptions, method, method_num_call_probe, data_handler,
+    def __init__(self, name, interval, next_scan, target, subscriptions, method, data_handler,
                  kwargs):
         self.name = name
         self.interval = interval
@@ -191,15 +187,9 @@ class NetatmoPublisher:
         self.target = target
         self.subscriptions = subscriptions
         self.method = method
-        self.method_num_call_probe = method_num_call_probe
         self.kwargs = kwargs
         self.num_consecutive_errors = 0
         self.data_handler = data_handler
-
-    def compute_num_api_calls(self):
-        if self.target and self.method_num_call_probe is not None:
-            return getattr(self.target, self.method_num_call_probe)()
-        return 1
 
     def push_emission(self, ts):
         self.num_consecutive_errors = 0
@@ -272,8 +262,8 @@ class NetatmoDataHandler:
         for i in range(5):
             has_error = False
             try:
-                num_calls = await self.account.async_update_topology(disabled_homes_ids=disabled_homes)
-                self.add_api_call(num_calls)
+                await self.account.async_update_topology(disabled_homes_ids=disabled_homes)
+                self.add_api_call(1)
 
             except (pyatmo.NoDevice, pyatmo.ApiError) as err:
                 _LOGGER.debug("init account.async_update_topology error NoDevice or ApiError %s", err)
@@ -293,7 +283,11 @@ class NetatmoDataHandler:
         for i in range(5):
             has_error = False
             try:
-                num_calls = await self.account.async_update_status()
+                num_calls = 0
+                for h in self.account.homes:
+                    await self.account.async_update_status(h)
+                    num_calls += 1
+
                 self.add_api_call(num_calls)
 
             except (pyatmo.NoDevice, pyatmo.ApiError) as err:
@@ -344,8 +338,7 @@ class NetatmoDataHandler:
     def compute_theoretical_call_per_hour(self):
         num_cph = 0.0
         for p in self._sorted_publisher:
-            added_call = p.compute_num_api_calls()
-            num_cph += added_call * (3600.0 / p.interval)
+            num_cph += 1 * (3600.0 / p.interval)
 
         return num_cph
 
@@ -358,11 +351,9 @@ class NetatmoDataHandler:
         for p in self._sorted_publisher:
             if p.name is not None:
                 if p.is_ts_allows_emission(current):
-                    added_call = p.compute_num_api_calls()
-                    if num_predicted_calls + added_call > n:
+                    if num_predicted_calls + 1 > n:
                         break
-
-                    num_predicted_calls += added_call
+                    num_predicted_calls += 1
                     candidates.append(p)
 
         return candidates, num_predicted_calls
@@ -540,9 +531,8 @@ class NetatmoDataHandler:
 
         if update_only is False:
 
-            num_fetch = self.publisher[signal_name].compute_num_api_calls()
             try:
-                num_fetch = await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
+                await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
                     **self.publisher[signal_name].kwargs
                 )
             except pyatmo.NoDevice as err:
@@ -564,12 +554,7 @@ class NetatmoDataHandler:
                 _LOGGER.debug("fetch error unknown %s", err)
                 has_error = True
 
-            try:
-                num_fetch = int(num_fetch)
-            except Exception:  # pylint: disable=broad-except
-                num_fetch = 1
-
-            self.add_api_call(num_fetch)
+            self.add_api_call(1)
 
         for update_callback in self.publisher[signal_name].subscriptions:
             if update_callback:
@@ -624,7 +609,6 @@ class NetatmoDataHandler:
             target=target,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
-            method_num_call_probe=PUBLISHERS_CALL_PROBER.get(publisher, None),
             data_handler=self,
             kwargs=kwargs,
         )
@@ -744,6 +728,8 @@ class NetatmoDataHandler:
             if not module.device_category:
                 continue
 
+            signals = netatmo_type_signal_map.get(module.device_category, [])
+
             if module.device_category == NetatmoDeviceCategory.meter:
 
                 if module.device_type == DeviceType.NLE:
@@ -766,10 +752,12 @@ class NetatmoDataHandler:
                                 continue
 
                             if num > 5:
-                                continue
-                            # #6 : GAZ #7: HOT WATER #8: COLD WATER
+                                if num == 6:
+                                    signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_GAS]
+                                else:
+                                    signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_WATER]
 
-            for signal in netatmo_type_signal_map.get(module.device_category, []):
+            for signal in signals:
                 async_dispatcher_send(
                     self.hass,
                     signal,

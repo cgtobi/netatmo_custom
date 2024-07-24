@@ -10,13 +10,11 @@ from datetime import datetime
 from typing import Any, cast
 
 try:
-    from .pyatmo.const import MeasureInterval
-    from .pyatmo.modules.module import EnergyHistoryMixin
+    from .pyatmo.modules.module import EnergyHistoryMixin, MeasureInterval
     from . import pyatmo
     from .pyatmo.modules import PublicWeatherArea
 except Exception:  # pylint: disable=broad-except
-    from pyatmo.const import MeasureInterval
-    from pyatmo.modules.module import EnergyHistoryMixin
+    from pyatmo.modules.module import EnergyHistoryMixin,MeasureInterval
     import pyatmo
     from pyatmo.modules import PublicWeatherArea
 
@@ -40,7 +38,7 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfSoundPressure,
     UnitOfSpeed,
-    UnitOfTemperature,
+    UnitOfTemperature, UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -63,7 +61,7 @@ from .const import (
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
     NETATMO_CREATE_WEATHER_SENSOR,
-    SIGNAL_NAME,
+    SIGNAL_NAME, NETATMO_CREATE_GAS, NETATMO_CREATE_WATER,
 )
 from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom, ENERGY_MEASURE
 from .entity import (
@@ -403,6 +401,22 @@ ENERGY_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
     device_class=SensorDeviceClass.ENERGY,
 )
 
+GAS_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
+    key="gas",
+    netatmo_name="sum_energy_elec",
+    native_unit_of_measurement=UnitOfVolume.LITERS,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    device_class=SensorDeviceClass.GAS,
+)
+
+WATER_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
+    key="water",
+    netatmo_name="sum_energy_elec",
+    native_unit_of_measurement=UnitOfVolume.LITERS,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    device_class=SensorDeviceClass.WATER,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -430,11 +444,46 @@ async def async_setup_entry(
                 netatmo_device.device.device_category,
                 netatmo_device.device.name,
             )
-            entity = NetatmoEnergySensor(netatmo_device)
+            entity = NetatmoEnergySensor(netatmo_device, description=ENERGY_SENSOR_DESCRIPTION)
             async_add_entities([entity])
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY, _create_energy_entity)
+    )
+
+
+    @callback
+    def _create_gas_entity(netatmo_device: NetatmoDevice) -> None:
+
+        if GAS_SENSOR_DESCRIPTION.netatmo_name in netatmo_device.device.features or hasattr(netatmo_device.device,
+                                                                                               GAS_SENSOR_DESCRIPTION.netatmo_name):
+            _LOGGER.debug(
+                "Adding %s gas sensor %s",
+                netatmo_device.device.device_category,
+                netatmo_device.device.name,
+            )
+            entity = NetatmoEnergySensor(netatmo_device, description=GAS_SENSOR_DESCRIPTION)
+            async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_GAS, _create_gas_entity)
+    )
+
+    @callback
+    def _create_water_entity(netatmo_device: NetatmoDevice) -> None:
+
+        if WATER_SENSOR_DESCRIPTION.netatmo_name in netatmo_device.device.features or hasattr(netatmo_device.device,
+                                                                                               WATER_SENSOR_DESCRIPTION.netatmo_name):
+            _LOGGER.debug(
+                "Adding %s water sensor %s",
+                netatmo_device.device.device_category,
+                netatmo_device.device.name,
+            )
+            entity = NetatmoEnergySensor(netatmo_device, description=WATER_SENSOR_DESCRIPTION)
+            async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_WATER, _create_water_entity)
     )
 
     @callback
@@ -697,16 +746,17 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
 
     def __init__(
             self,
-            netatmo_device: NetatmoDevice
+            netatmo_device: NetatmoDevice,
+            description: NetatmoSensorEntityDescription
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(netatmo_device, ENERGY_SENSOR_DESCRIPTION)
+        super().__init__(netatmo_device, description)
 
+        strt = datetime.now()
         if isinstance(self.device, EnergyHistoryMixin):
-            self.device.reset_measures()
+            self.device.reset_measures(start_power_time=strt ,in_reset=False)
 
-        self._current_start_anchor = datetime.now()
-        self.device.in_reset = False
+        self._current_start_anchor = datetime.fromisoformat("2024-07-24 00:00:00")
         self._last_val_sent = None
 
     def complement_publishers(self, netatmo_device):
@@ -734,9 +784,6 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         if end.day != start.day:
             return 0
 
-        if isinstance(self.device, EnergyHistoryMixin):
-            return self.device.update_measures_num_calls()
-
         return 1
 
     async def async_update_energy(self, **kwargs):
@@ -750,7 +797,7 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
         #netatmo is only keeping energy measures for 2.5 days, we reset every day
         if end.day != start.day:
             #force everything at 0
-            self.device.reset_measures()
+            self.device.reset_measures(start_power_time=end)
             self._current_start_anchor = end
             return 0
 
