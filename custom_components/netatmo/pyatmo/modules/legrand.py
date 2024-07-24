@@ -9,6 +9,7 @@ from ..modules.module import (
     ContactorMixin,
     DimmableMixin,
     Dimmer,
+    EnergyHistoryLegacyMixin,
     EnergyHistoryMixin,
     Fan,
     FirmwareMixin,
@@ -20,7 +21,6 @@ from ..modules.module import (
     Switch,
     SwitchMixin,
     WifiMixin,
-    EnergyHistoryLegacyMixin,
 )
 
 LOG = logging.getLogger(__name__)
