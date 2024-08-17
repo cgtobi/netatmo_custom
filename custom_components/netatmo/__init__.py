@@ -223,7 +223,7 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
 
     local_data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
 
-    account_home = local_data_handler.account.all_account_homes_id
+    account_home = local_data_handler.account.all_homes_id
 
     do_reload = False
     homes = []

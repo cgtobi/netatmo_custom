@@ -131,7 +131,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
 
             if enabled_homes:
 
-                homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes_id
+                homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_homes_id
                 disabled_homes = []
                 for hid in homes:
                     if hid not in enabled_homes:
@@ -152,7 +152,7 @@ class NetatmoOptionsFlowHandler(OptionsFlow):
 
         schema = {}
 
-        homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_account_homes_id
+        homes = self.hass.data[DOMAIN][self.config_entry.entry_id][DATA_HANDLER].account.all_homes_id
 
         if len(homes) > 1:
             l_disabled_homes = self.options.get(CONF_DISABLED_HOMES, [])
