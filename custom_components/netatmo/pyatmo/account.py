@@ -18,7 +18,6 @@ from .const import (
     SETSTATE_ENDPOINT,
     RawData,
 )
-from .exceptions import ApiHomeReachabilityError
 from .helpers import extract_raw_data
 from .home import Home
 from .modules.module import MeasureInterval, Module
