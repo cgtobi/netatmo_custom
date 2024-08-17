@@ -178,7 +178,7 @@ async def async_setup_entry(
     )
     platform.async_register_entity_service(
         SERVICE_CLEAR_TEMPERATURE_SETTING,
-        {},
+        None,
         "_async_service_clear_temperature_setting",
     )
 
