@@ -50,7 +50,6 @@ from .const import (
     PLATFORMS,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_PUSH_TYPE,
-    CONF_DISABLED_HOMES
 )
 from .data_handler import NetatmoDataHandler
 from .webhook import async_handle_webhook
@@ -62,20 +61,16 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 MAX_WEBHOOK_RETRIES = 3
 
 
-def _reset_hass_domain(hass: HomeAssistant):
-    hass.data[DOMAIN][DATA_PERSONS] = {}
-    hass.data[DOMAIN][DATA_DEVICE_IDS] = {}
-    hass.data[DOMAIN][DATA_SCHEDULES] = {}
-    hass.data[DOMAIN][DATA_HOMES] = {}
-    hass.data[DOMAIN][DATA_EVENTS] = {}
-    hass.data[DOMAIN][DATA_CAMERAS] = {}
-
-
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Netatmo component."""
-    hass.data[DOMAIN] = {}
-
-    _reset_hass_domain(hass)
+    hass.data[DOMAIN] = {
+        DATA_PERSONS: {},
+        DATA_DEVICE_IDS: {},
+        DATA_SCHEDULES: {},
+        DATA_HOMES: {},
+        DATA_EVENTS: {},
+        DATA_CAMERAS: {},
+    }
 
     return True
 
@@ -220,33 +215,7 @@ async def async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry) 
 
 async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle signals of config entry being updated."""
-
-    local_data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
-
-    account_home = local_data_handler.account.all_homes_id
-
-    do_reload = False
-    homes = []
-
-    if account_home is not None and len(account_home) > 1:
-        disabled_homes = entry.options.get(CONF_DISABLED_HOMES, {})
-        enabled_homes = {
-            home_id for home_id in account_home if home_id not in disabled_homes
-        }   
-        homes = local_data_handler.account.homes # it can have more homes, the public ones
-        current_homes = {
-            home_id for home_id in homes if home_id in account_home
-        }
-        if current_homes != enabled_homes:
-            do_reload = True
-
-    if do_reload is False:
-        # nothing to change here check for the public
-        async_dispatcher_send(hass, f"signal-{DOMAIN}-public-update-{entry.entry_id}")
-    else:
-        _LOGGER.debug("Called reload because of supported homes changes %s", homes)
-        _reset_hass_domain(hass)
-        await hass.config_entries.async_reload(entry.entry_id)
+    async_dispatcher_send(hass, f"signal-{DOMAIN}-public-update-{entry.entry_id}")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

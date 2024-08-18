@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
-import logging
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from itertools import islice
+import logging
 from time import time
 from typing import Any
 
@@ -15,7 +16,7 @@ try:
     from . import pyatmo
     from .pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
-        DeviceType as NetatmoDeviceType, DeviceType,
+        DeviceType as NetatmoDeviceType,
     )
 except Exception:  # pylint: disable=broad-except
     import pyatmo
@@ -49,7 +50,6 @@ from .const import (
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SELECT,
     NETATMO_CREATE_SENSOR,
-    NETATMO_CREATE_ENERGY,
     NETATMO_CREATE_SWITCH,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
@@ -57,7 +57,6 @@ from .const import (
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
-    CONF_DISABLED_HOMES, NETATMO_CREATE_GAS, NETATMO_CREATE_WATER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,7 +68,6 @@ WEATHER = "weather"
 AIR_CARE = "air_care"
 PUBLIC = NetatmoDeviceType.public
 EVENT = "event"
-ENERGY_MEASURE = "energy"
 
 PUBLISHERS = {
     ACCOUNT: "async_update_topology",
@@ -78,61 +76,22 @@ PUBLISHERS = {
     AIR_CARE: "async_update_air_care",
     PUBLIC: "async_update_public_weather",
     EVENT: "async_update_events",
-    ENERGY_MEASURE: "async_update_energy",
 }
 
-# Netatmo rate limiting: https://dev.netatmo.com/guideline
-
-# Application limits
-#
-# If you have less than 100 users:
-#
-# 200 requests every 10 seconds
-# 2000 requests every hour
-#
-# If you have more than 100 users:
-#
-# (2 * number of users) requests every 10 seconds
-# (20 * number of users) requests every hour
-
-
-# Per user limits
-#
-# 50 requests every 10 seconds
-# 500 requests every hour
-
-
-CALL_PER_HOUR = "CALL_PER_HOUR"
-CALL_PER_TEN_SECONDS = "CALL_PER_10S"
-SCAN_INTERVAL = "SCAN_INTERVAL"
-
-NETATMO_USER_CALL_LIMITS = {
-    CALL_PER_HOUR: 20,        # 20 to comply with the global limit of (20 * number of users) requests every hour
-    CALL_PER_TEN_SECONDS: 2,  # 2  to comply with the global limit of (2 * number of users) requests every 10 seconds
+BATCH_SIZE = 3
+DEV_FACTOR = 7
+DEV_LIMIT = 400
+CLOUD_FACTOR = 2
+CLOUD_LIMIT = 150
+DEFAULT_INTERVALS = {
     ACCOUNT: 10800,
-    HOME: 150,
+    HOME: 300,
     WEATHER: 600,
     AIR_CARE: 300,
     PUBLIC: 600,
     EVENT: 600,
-    ENERGY_MEASURE: 1800,
-    SCAN_INTERVAL: 60
 }
-NETATMO_DEV_CALL_LIMITS = {
-    CALL_PER_HOUR: 450,        # in this case per user limit is: 500 requests every hour
-    CALL_PER_TEN_SECONDS: 45,  # in this case per user limit is: 50 requests every 10 seconds
-    ACCOUNT: 3600,
-    HOME: 5,
-    WEATHER: 200,
-    AIR_CARE: 100,
-    PUBLIC: 200,
-    EVENT: 200,
-    ENERGY_MEASURE: 900,
-    SCAN_INTERVAL: 5
-}
-
-CPH_ADJUSTEMENT_DOWN = 0.8
-CPH_ADJUSTEMENT_BACK_UP = 1.1
+SCAN_INTERVAL = 60
 
 
 @dataclass
@@ -172,158 +131,39 @@ class NetatmoPublisher:
     name: str
     interval: int
     next_scan: float
-    target: Any
     subscriptions: set[CALLBACK_TYPE | None]
     method: str
     kwargs: dict
-    num_consecutive_errors: int
-    data_handler: NetatmoDataHandler
-
-    def __init__(self, name, interval, next_scan, target, subscriptions, method, data_handler,
-                 kwargs):
-        self.name = name
-        self.interval = interval
-        self.next_scan = next_scan
-        self.target = target
-        self.subscriptions = subscriptions
-        self.method = method
-        self.kwargs = kwargs
-        self.num_consecutive_errors = 0
-        self.data_handler = data_handler
-
-    def push_emission(self, ts):
-        self.num_consecutive_errors = 0
-
-    def set_next_scan(self, ts, wait_time=0):
-        # rand_delta = int(self.interval // 8)
-        # rnd = random.randint(0 - rand_delta, rand_delta)
-        # self.next_scan = ts + max(wait_time + abs(rnd), self.interval + rnd)
-        self.next_scan = ts + self.interval + wait_time
-
-    def is_ts_allows_emission(self, ts):
-        return self.next_scan <= ts  # + max(self.data_handler._scan_interval, self.interval // 12)
 
 
 class NetatmoDataHandler:
     """Manages the Netatmo data handling."""
 
-    account: pyatmo.AsyncAccount | None
+    account: pyatmo.AsyncAccount
+    _interval_factor: int
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize self."""
         self.hass = hass
-        self.account = None
         self.config_entry = config_entry
         self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
         self.publisher: dict[str, NetatmoPublisher] = {}
-        self._sorted_publisher: list[NetatmoPublisher] = []
+        self._queue: deque = deque()
         self._webhook: bool = False
         if config_entry.data["auth_implementation"] == cloud.DOMAIN:
-            limits = NETATMO_USER_CALL_LIMITS
-            _LOGGER.debug("NETATMO INTEGRATION : USE GLOBAL LIMITS")
+            self._interval_factor = CLOUD_FACTOR
+            self._rate_limit = CLOUD_LIMIT
         else:
-            limits = NETATMO_DEV_CALL_LIMITS
-            _LOGGER.debug("NETATMO INTEGRATION : USE DEV LIMITS FOR YOUR OWN APP")
-
-        self._limits = limits
-        self._scan_interval = limits[SCAN_INTERVAL]
-        self._initial_hourly_rate_limit = limits[CALL_PER_HOUR]
-
-        self._10s_rate_limit = limits[CALL_PER_TEN_SECONDS]
-
-        self.rolling_hour = []
-        self._adjusted_hourly_rate_limit = None
-        self._last_cph_change = None
-
-        self._min_call_per_interval = None
-        self._max_call_per_interval = None
-
-        self.adjust_per_scan_numbers()
-
-    def add_api_call(self, n):
-
-        current = time()
-        for i in range(n):
-            self.rolling_hour.append(current)
-
-        while len(self.rolling_hour) > 0 and current - self.rolling_hour[0] > 3600:
-            self.rolling_hour.pop(0)
-
-    def get_current_call_per_hour(self):
-        return int(len(self.rolling_hour))
+            self._interval_factor = DEV_FACTOR
+            self._rate_limit = DEV_LIMIT
+        self.poll_start = time()
+        self.poll_count = 0
 
     async def async_setup(self) -> None:
-
-        disabled_homes = self.config_entry.options.get(CONF_DISABLED_HOMES, [])
-
-        self.account = pyatmo.AsyncAccount(self._auth)
-
-        # try to update topology as best as possible at start if we get some errors we can continue anyway
-        for i in range(5):
-            has_error = False
-            try:
-                await self.account.async_update_topology(disabled_homes_ids=disabled_homes)
-                self.add_api_call(1)
-
-            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                _LOGGER.debug("init account.async_update_topology error NoDevice or ApiError %s", err)
-                has_error = True
-            except (TimeoutError, aiohttp.ClientConnectorError) as err:
-                _LOGGER.debug("init account.async_update_topology error Timeout or ClientConnectorError: %s",  err)
-                has_error = True
-            except Exception as err:
-                _LOGGER.debug("init account.async_update_topology error unknown %s",  err)
-                has_error = True
-
-            if has_error is False:
-                break
-
-            await asyncio.sleep(5)
-
-        for i in range(5):
-            has_error = False
-            try:
-                num_calls = 0
-                for h in self.account.homes:
-                    await self.account.async_update_status(h)
-                    num_calls += 1
-
-                self.add_api_call(num_calls)
-
-            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                _LOGGER.debug("init account.async_update_status error NoDevice or ApiError %s", err)
-                has_error = True
-            except (TimeoutError, aiohttp.ClientConnectorError) as err:
-                _LOGGER.debug("init account.async_update_status error Timeout or ClientConnectorError: %s", err)
-                has_error = True
-            except Exception as err:
-                _LOGGER.debug("init account.async_update_status error unknown %s", err)
-                has_error = True
-
-            if has_error is False:
-                break
-
-            await asyncio.sleep(5)
-
-        # do update only as async_update_topology will call the APIS
-        await self.subscribe_with_target(
-            publisher=ACCOUNT,
-            signal_name=ACCOUNT,
-            target=None,
-            update_callback=None,
-            update_only=True
-        )
-
-        await self.hass.config_entries.async_forward_entry_setups(
-            self.config_entry, PLATFORMS
-        )
-
-        await self.async_dispatch()
-
-        """Set up the Netatmo data handler. Do that at the end to have a good and proper init before calling it"""
+        """Set up the Netatmo data handler."""
         self.config_entry.async_on_unload(
             async_track_time_interval(
-                self.hass, self.async_update, timedelta(seconds=self._scan_interval)
+                self.hass, self.async_update, timedelta(seconds=SCAN_INTERVAL)
             )
         )
 
@@ -335,180 +175,50 @@ class NetatmoDataHandler:
             )
         )
 
-    def compute_theoretical_call_per_hour(self):
-        num_cph = 0.0
-        for p in self._sorted_publisher:
-            num_cph += 1 * (3600.0 / p.interval)
+        self.account = pyatmo.AsyncAccount(self._auth)
 
-        return num_cph
+        await self.subscribe(ACCOUNT, ACCOUNT, None)
 
-    def get_publisher_candidates(self, current, n):
-        self._sorted_publisher = sorted(self._sorted_publisher, key=lambda x: x.next_scan)
-        # get the ones with the "older" not handled publisher
-
-        candidates = []
-        num_predicted_calls = 0
-        for p in self._sorted_publisher:
-            if p.name is not None:
-                if p.is_ts_allows_emission(current):
-                    if num_predicted_calls + 1 > n:
-                        break
-                    num_predicted_calls += 1
-                    candidates.append(p)
-
-        return candidates, num_predicted_calls
-
-    def adjust_per_scan_numbers(self):
-        hrl = self._adjusted_hourly_rate_limit
-        if hrl is None:
-            hrl = self._initial_hourly_rate_limit
-
-        scan_limit_per_hour = (hrl * self._scan_interval) // 3600
-
-        self._min_call_per_interval = int(min(scan_limit_per_hour, (self._scan_interval / 10.0) * self._10s_rate_limit))
-        self._max_call_per_interval = int(max(scan_limit_per_hour, (self._scan_interval / 10.0) * self._10s_rate_limit))
-
-    def adjust_intervals_to_target(self,
-                                   target=None,
-                                   force_adjust=False,
-                                   redo_next_scan=True,
-                                   do_wait_scan_for_cph_to_target=False):
-
-        current = int(time())
-
-        if target is None:
-            if self._adjusted_hourly_rate_limit is None:
-                target = self._initial_hourly_rate_limit
-            else:
-                target = self._adjusted_hourly_rate_limit
-        else:
-            target = min(self._initial_hourly_rate_limit, int(target))
-
-        if (self._adjusted_hourly_rate_limit is not None and force_adjust is False
-                and target == self._adjusted_hourly_rate_limit):
-            # no need to adjust anything
-            return
-
-        if do_wait_scan_for_cph_to_target:
-            # wait for a bit longer to reach 80% of the target cph to have 20% of room to breath
-            wait_time = self.get_wait_time_to_reach_targets(current, int(target * 0.80))
-        else:
-            wait_time = 0
-
-        ctph = self.compute_theoretical_call_per_hour()
-
-        self._adjusted_hourly_rate_limit = int(target)
-
-        if force_adjust is True or ctph >= target:
-            msg = ("Adapting intervals to comply with the requested rate limit "
-                   "from theoretical %f to %i (initial: %i) waiting for : %i s")
-            _LOGGER.info(msg, ctph, target, self._initial_hourly_rate_limit, wait_time)
-
-            for p in self._sorted_publisher:
-                p.interval = int((p.interval * ctph) / target) + 1
-
-            if redo_next_scan:
-                self._spread_next_scans(wait_time=wait_time)
-
-        self.adjust_per_scan_numbers()
-
-    def get_wait_time_to_reach_targets(self, current: int, target: int) -> int:
-
-        delta = int(len(self.rolling_hour) - target)
-
-        if delta <= 0:
-            return 0
-
-        if delta > len(self.rolling_hour):
-            # just wait for the full cleaning of the rolling one
-            return 3600 + 2 * self._scan_interval
-        else:
-            t_stop = self.rolling_hour[delta - 1]
-
-            return max(self._scan_interval, int(t_stop + 3600 + self._scan_interval - current))
+        await self.hass.config_entries.async_forward_entry_setups(
+            self.config_entry, PLATFORMS
+        )
+        await self.async_dispatch()
 
     async def async_update(self, event_time: datetime) -> None:
-        """Update device. """
+        """Update device.
 
-        # no need all the time but fairly quick
-        self.adjust_intervals_to_target()
-
-        # keep cph up to date whatever happens (time increment)
-        self.add_api_call(0)
-
-        cph_init = self.get_current_call_per_hour()
-
-        num_call = max(0, min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - cph_init))
-
-        if num_call > 0:
-            delta_sleep = self._scan_interval / (3.0 * num_call)
-        else:
-            _LOGGER.info("Getting 0 approved calls: adjusted limit : %f current cph: %i",
-                         self._adjusted_hourly_rate_limit, self.get_current_call_per_hour())
-            delta_sleep = 0
-
-        current = int(time())
-
-        candidates, num_predicted_calls = self.get_publisher_candidates(current, num_call)
-
-        if len(candidates) <= 1:
-            delta_sleep = 0
-
-        has_been_throttled = False
-        for data_class in candidates:
+        We do up to BATCH_SIZE calls in one update in order
+        to minimize the calls on the api service.
+        """
+        for data_class in islice(self._queue, 0, BATCH_SIZE * self._interval_factor):
+            if data_class.next_scan > time():
+                continue
 
             if publisher := data_class.name:
-                error, throttling_error = await self.async_fetch_data(publisher)
+                error = await self.async_fetch_data(publisher)
 
-                if throttling_error:
-                    has_been_throttled = True
-                    break
-                elif error:
-                    data_class.num_consecutive_errors += 1
-                    _LOGGER.debug("Error on publisher: %s, num_errors: %i",
-                                  publisher, data_class.num_consecutive_errors)
-                    # Try again a bit later, this is not a rate limit
-                    data_class.next_scan = current + self._scan_interval  # *(data_class.num_consecutive_errors + 1)
+                if error:
+                    self.publisher[publisher].next_scan = (
+                        time() + data_class.interval * 10
+                    )
                 else:
-                    self.publisher[publisher].push_emission(current)
-                    self.publisher[publisher].set_next_scan(current)
+                    self.publisher[publisher].next_scan = time() + data_class.interval
 
-            if delta_sleep > 0:
-                await asyncio.sleep(delta_sleep)
-
-        cph = self.get_current_call_per_hour()
-        current = int(time())
-        msg = "Calls per hour: %i , num call asked: %i num candidates: %i num call predicted : %i  num pub: %i"
-        _LOGGER.debug(msg, cph, num_call, len(candidates), num_predicted_calls, len(self._sorted_publisher))
-
-        if self._last_cph_change is None or current - self._last_cph_change > 3600:
-
-            if (has_been_throttled or
-                    (cph > self._adjusted_hourly_rate_limit and cph > cph_init and num_predicted_calls > 0)):
-                _LOGGER.info("Calls per hour hit rate limit: %i/%i throttled API: %s",
-                             cph, self._adjusted_hourly_rate_limit, has_been_throttled)
-                # remove 20% each time ...
-                new_target = int(self._adjusted_hourly_rate_limit * CPH_ADJUSTEMENT_DOWN)
-                self.adjust_intervals_to_target(new_target,
-                                                force_adjust=False,
-                                                redo_next_scan=True,
-                                                do_wait_scan_for_cph_to_target=True)
-                self._last_cph_change = current
-            else:
-                new_target = int(min(self._initial_hourly_rate_limit,
-                                     int(self._adjusted_hourly_rate_limit * CPH_ADJUSTEMENT_BACK_UP)))
-                if self._adjusted_hourly_rate_limit != self._initial_hourly_rate_limit:
-                    _LOGGER.debug("bumping back rate limit: %i / (initial: %i)",
-                                  new_target, self._initial_hourly_rate_limit)
-                    # every "good"  hour window, let get the rate limit up (with a limit) going up only by half
-                    # what we went down in case of issue (so here 10% up)
-                    self.adjust_intervals_to_target(new_target, force_adjust=True, redo_next_scan=False)
-                    self._last_cph_change = current
+        self._queue.rotate(BATCH_SIZE)
+        cph = self.poll_count / (time() - self.poll_start) * 3600
+        _LOGGER.debug("Calls per hour: %i", cph)
+        if cph > self._rate_limit:
+            for publisher in self.publisher.values():
+                publisher.next_scan += 60
+        if (time() - self.poll_start) > 3600:
+            self.poll_start = time()
+            self.poll_count = 0
 
     @callback
     def async_force_update(self, signal_name: str) -> None:
         """Prioritize data retrieval for given data class entry."""
-        self.publisher[signal_name].next_scan = 0
+        self.publisher[signal_name].next_scan = time()
+        self._queue.rotate(-(self._queue.index(self.publisher[signal_name])))
 
     async def handle_event(self, event: dict) -> None:
         """Handle webhook events."""
@@ -524,66 +234,35 @@ class NetatmoDataHandler:
             _LOGGER.debug("%s camera reconnected", MANUFACTURER)
             self.async_force_update(ACCOUNT)
 
-    async def async_fetch_data(self, signal_name: str, update_only=False) -> (bool, bool):
+    async def async_fetch_data(self, signal_name: str) -> bool:
         """Fetch data and notify."""
+        self.poll_count += 1
         has_error = False
-        has_throttling_error = False
+        try:
+            await getattr(self.account, self.publisher[signal_name].method)(
+                **self.publisher[signal_name].kwargs
+            )
 
-        if update_only is False:
+        except (pyatmo.NoDevice, pyatmo.ApiError) as err:
+            _LOGGER.debug(err)
+            has_error = True
 
-            try:
-                await getattr(self.publisher[signal_name].target, self.publisher[signal_name].method)(
-                    **self.publisher[signal_name].kwargs
-                )
-            except pyatmo.NoDevice as err:
-                _LOGGER.debug("fetch error NoDevice: %s", err)
-                has_error = True
-            except pyatmo.ApiHomeReachabilityError as err:
-                _LOGGER.debug("fetch error Not Reachable Home: %s", err)
-                has_error = True
-            except pyatmo.ApiErrorThrottling as err:
-                _LOGGER.debug("fetch error Throttling: %s", err)
-                has_throttling_error = True
-            except pyatmo.ApiError as err:
-                _LOGGER.debug("fetch error ApiError: %s", err)
-                has_error = True
-            except (TimeoutError, aiohttp.ClientConnectorError) as err:
-                _LOGGER.debug("fetch error Timeout or ClientConnectorError: %s", err)
-                return True, False
-            except Exception as err:
-                _LOGGER.debug("fetch error unknown %s", err)
-                has_error = True
-
-            self.add_api_call(1)
+        except (TimeoutError, aiohttp.ClientConnectorError) as err:
+            _LOGGER.debug(err)
+            return True
 
         for update_callback in self.publisher[signal_name].subscriptions:
             if update_callback:
                 update_callback()
 
-        return has_error, has_throttling_error
+        return has_error
 
     async def subscribe(
-            self,
-            publisher: str,
-            signal_name: str,
-            update_callback: CALLBACK_TYPE | None,
-            **kwargs: Any,
-    ) -> None:
-        await self.subscribe_with_target(publisher=publisher,
-                                         signal_name=signal_name,
-                                         target=None,
-                                         update_callback=update_callback,
-                                         update_only=False,
-                                         **kwargs)
-
-    async def subscribe_with_target(
-            self,
-            publisher: str,
-            signal_name: str,
-            target: Any,
-            update_callback: CALLBACK_TYPE | None,
-            update_only=False,
-            **kwargs: Any
+        self,
+        publisher: str,
+        signal_name: str,
+        update_callback: CALLBACK_TYPE | None,
+        **kwargs: Any,
     ) -> None:
         """Subscribe to publisher."""
         if signal_name in self.publisher:
@@ -591,65 +270,30 @@ class NetatmoDataHandler:
                 self.publisher[signal_name].subscriptions.add(update_callback)
             return
 
-        if target is None:
-            target = self.account
-
-        if publisher == PUBLIC:
+        if publisher == "public":
             kwargs = {"area_id": self.account.register_public_weather_area(**kwargs)}
-        elif publisher == ACCOUNT:
-            kwargs = {"disabled_homes_ids": self.config_entry.options.get(CONF_DISABLED_HOMES, [])}
 
-        interval = int(self._limits[publisher])
-        # n = len(self._sorted_publisher)
-
+        interval = int(DEFAULT_INTERVALS[publisher] / self._interval_factor)
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
-            next_scan=time() + interval // 2,  # start sooner at start to get some data points
-            target=target,
+            next_scan=time() + interval,
             subscriptions={update_callback},
             method=PUBLISHERS[publisher],
-            data_handler=self,
             kwargs=kwargs,
         )
 
-        # do that only if it is on account, is get measure or other ...
-        # don't do too much here has it will kill the number of calls
         try:
-            await self.async_fetch_data(signal_name, update_only=update_only)
+            await self.async_fetch_data(signal_name)
         except KeyError:
-            # in case we have a bad formed response from the API
             self.publisher.pop(signal_name)
-            _LOGGER.debug("Publisher %s removed at subscription due to mal formed response!!!!!!", signal_name)
             raise
 
-        self._sorted_publisher.append(self.publisher[signal_name])
+        self._queue.append(self.publisher[signal_name])
         _LOGGER.debug("Publisher %s added", signal_name)
 
-        # do spread each time, not very efficient but done only at start
-        self._spread_next_scans()
-
-    def _spread_next_scans(self, wait_time=0):
-        intervals = {}
-        current = int(time())
-
-        for p in self._sorted_publisher:
-            if p.interval not in intervals:
-                intervals[p.interval] = [p]
-            else:
-                intervals[p.interval].append(p)
-
-        for interval, publishers in intervals.items():
-            if len(publishers) > 1:
-                for i, p in enumerate(publishers):
-                    p.next_scan = current + max(wait_time, 1) + int(i * interval // len(publishers))
-            else:
-                publishers[0].next_scan = current + max(wait_time, 1) + interval//2
-
-
-
     async def unsubscribe(
-            self, signal_name: str, update_callback: CALLBACK_TYPE | None
+        self, signal_name: str, update_callback: CALLBACK_TYPE | None
     ) -> None:
         """Unsubscribe from publisher."""
         if update_callback not in self.publisher[signal_name].subscriptions:
@@ -658,7 +302,7 @@ class NetatmoDataHandler:
         self.publisher[signal_name].subscriptions.remove(update_callback)
 
         if not self.publisher[signal_name].subscriptions:
-            self._sorted_publisher = [p for p in self._sorted_publisher if p.name != signal_name]
+            self._queue.remove(self.publisher[signal_name])
             self.publisher.pop(signal_name)
             _LOGGER.debug("Publisher %s removed", signal_name)
 
@@ -713,51 +357,21 @@ class NetatmoDataHandler:
                 NETATMO_CREATE_CAMERA,
                 NETATMO_CREATE_CAMERA_LIGHT,
             ],
-            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
-            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT],
+            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER],
             NetatmoDeviceCategory.switch: [
                 NETATMO_CREATE_LIGHT,
                 NETATMO_CREATE_SWITCH,
                 NETATMO_CREATE_SENSOR,
-                NETATMO_CREATE_ENERGY,
             ],
-            NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
-            NetatmoDeviceCategory.fan: [NETATMO_CREATE_FAN, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR],
+            NetatmoDeviceCategory.fan: [NETATMO_CREATE_FAN],
         }
         for module in home.modules.values():
             if not module.device_category:
                 continue
 
-            signals = netatmo_type_signal_map.get(module.device_category, [])
-
-            if module.device_category == NetatmoDeviceCategory.meter:
-
-                if module.device_type == DeviceType.NLE:
-                    if module.modules or module.bridge is None:
-                        # if we have an ecocounter as bridge, do not add its sensors as it is only its owned modules
-                        # that are sporting the real sensors wiht power and energy .... except that power is not
-                        # available in the case of this kind of ecocounter
-                        continue
-                    else:
-                        # if there is a bridge it means it is a leaf and should be kept...but only the electrical ones
-                        if module.bridge:
-                            name = module.entity_id
-                            sp = name.split("#")
-                            if len(sp) != 2:
-                                continue
-                            num = sp[1]
-                            try:
-                                num = int(num)
-                            except:
-                                continue
-
-                            if num > 5:
-                                if num == 6:
-                                    signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_GAS]
-                                else:
-                                    signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_WATER]
-
-            for signal in signals:
+            for signal in netatmo_type_signal_map.get(module.device_category, []):
                 async_dispatcher_send(
                     self.hass,
                     signal,
