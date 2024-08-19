@@ -41,9 +41,6 @@ API_SCOPES_EXCLUDED_FROM_CLOUD = [
 ]
 
 NETATMO_CREATE_BATTERY = "netatmo_create_battery"
-NETATMO_CREATE_ENERGY = "netatmo_create_energy"
-NETATMO_CREATE_GAS = "netatmo_create_gas"
-NETATMO_CREATE_WATER = "netatmo_create_water"
 NETATMO_CREATE_CAMERA = "netatmo_create_camera"
 NETATMO_CREATE_CAMERA_LIGHT = "netatmo_create_camera_light"
 NETATMO_CREATE_CLIMATE = "netatmo_create_climate"
@@ -65,7 +62,6 @@ CONF_LON_SW = "lon_sw"
 CONF_NEW_AREA = "new_area"
 CONF_PUBLIC_MODE = "mode"
 CONF_WEATHER_AREAS = "weather_areas"
-CONF_DISABLED_HOMES = "disabled_homes"
 
 OAUTH2_AUTHORIZE = "https://api.netatmo.com/oauth2/authorize"
 OAUTH2_TOKEN = "https://api.netatmo.com/oauth2/token"

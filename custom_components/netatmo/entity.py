@@ -48,15 +48,7 @@ class NetatmoBaseEntity(Entity):
         for publisher in self._publishers:
             signal_name = publisher[SIGNAL_NAME]
 
-            if "target_module" in publisher:
-                await self.data_handler.subscribe_with_target(
-                    publisher=publisher["name"],
-                    signal_name=signal_name,
-                    target=publisher["target_module"],
-                    update_callback=self.async_update_callback,
-                    update_only=True
-                )
-            elif "home_id" in publisher:
+            if "home_id" in publisher:
                 await self.data_handler.subscribe(
                     publisher["name"],
                     signal_name,
