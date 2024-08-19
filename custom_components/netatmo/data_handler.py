@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
 from time import time
 from typing import Any
 
@@ -15,7 +15,8 @@ try:
     from . import pyatmo
     from .pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
-        DeviceType as NetatmoDeviceType, DeviceType,
+        DeviceType,
+        DeviceType as NetatmoDeviceType,
     )
 except Exception:  # pylint: disable=broad-except
     import pyatmo
@@ -35,6 +36,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     AUTH,
+    CONF_DISABLED_HOMES,
     DATA_PERSONS,
     DATA_SCHEDULES,
     DOMAIN,
@@ -44,20 +46,21 @@ from .const import (
     NETATMO_CREATE_CAMERA_LIGHT,
     NETATMO_CREATE_CLIMATE,
     NETATMO_CREATE_COVER,
+    NETATMO_CREATE_ENERGY,
     NETATMO_CREATE_FAN,
+    NETATMO_CREATE_GAS,
     NETATMO_CREATE_LIGHT,
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SELECT,
     NETATMO_CREATE_SENSOR,
-    NETATMO_CREATE_ENERGY,
     NETATMO_CREATE_SWITCH,
+    NETATMO_CREATE_WATER,
     NETATMO_CREATE_WEATHER_SENSOR,
     PLATFORMS,
     WEBHOOK_ACTIVATION,
     WEBHOOK_DEACTIVATION,
     WEBHOOK_NACAMERA_CONNECTION,
     WEBHOOK_PUSH_TYPE,
-    CONF_DISABLED_HOMES, NETATMO_CREATE_GAS, NETATMO_CREATE_WATER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -213,6 +216,9 @@ class NetatmoDataHandler:
         """Initialize self."""
         self.hass = hass
         self.account = None
+        self._init_complete = False
+        self._init_topology_complete = False
+        self._init_update_status_complete = False
         self.config_entry = config_entry
         self._auth = hass.data[DOMAIN][config_entry.entry_id][AUTH]
         self.publisher: dict[str, NetatmoPublisher] = {}
@@ -252,14 +258,10 @@ class NetatmoDataHandler:
     def get_current_call_per_hour(self):
         return int(len(self.rolling_hour))
 
-    async def async_setup(self) -> None:
+    async def _init_update_topology_if_needed(self):
 
-        disabled_homes = self.config_entry.options.get(CONF_DISABLED_HOMES, [])
-
-        self.account = pyatmo.AsyncAccount(self._auth)
-
-        # try to update topology as best as possible at start if we get some errors we can continue anyway
-        for i in range(5):
+        if self._init_topology_complete is False:
+            disabled_homes = self.config_entry.options.get(CONF_DISABLED_HOMES, [])
             has_error = False
             try:
                 await self.account.async_update_topology(disabled_homes_ids=disabled_homes)
@@ -276,11 +278,14 @@ class NetatmoDataHandler:
                 has_error = True
 
             if has_error is False:
-                break
+                self._init_topology_complete = True
 
-            await asyncio.sleep(5)
+        return self._init_topology_complete
 
-        for i in range(5):
+    async def _init_update_status_if_needed(self):
+
+        if self._init_update_status_complete is False:
+
             has_error = False
             try:
                 num_calls = 0
@@ -301,24 +306,48 @@ class NetatmoDataHandler:
                 has_error = True
 
             if has_error is False:
-                break
+                self._init_update_status_complete = True
 
-            await asyncio.sleep(5)
+        return self._init_update_status_complete
 
-        # do update only as async_update_topology will call the APIS
-        await self.subscribe_with_target(
-            publisher=ACCOUNT,
-            signal_name=ACCOUNT,
-            target=None,
-            update_callback=None,
-            update_only=True
-        )
 
-        await self.hass.config_entries.async_forward_entry_setups(
-            self.config_entry, PLATFORMS
-        )
+    async def _do_complete_init_if_needed(self):
+        if self._init_complete is False:
+            if await self._init_update_topology_if_needed() and await self._init_update_status_if_needed():
+                # we do are in a proper state
+                # do update only as async_update_topology will call the APIS, and update topology done already
 
-        await self.async_dispatch()
+                # the code below will be run only once
+                await self.subscribe_with_target(
+                    publisher=ACCOUNT,
+                    signal_name=ACCOUNT,
+                    target=None,
+                    update_callback=None,
+                    update_only=True
+                )
+
+                # it only registers signals to be emitted later
+                await self.hass.config_entries.async_forward_entry_setups(
+                    self.config_entry, PLATFORMS
+                )
+
+                #perform dispatch to create entities, modules, etc
+                await self.async_dispatch()
+                _LOGGER.info("Netatmo integration initialized")
+                self._init_complete = True
+
+        return self._init_complete
+
+    async def async_setup(self) -> None:
+
+        self._init_complete = False
+        self._init_topology_complete = False
+        self._init_update_status_complete = False
+
+        self.account = pyatmo.AsyncAccount(self._auth)
+
+        if await self._do_complete_init_if_needed() is False:
+            _LOGGER.info("Netatmo integration not properly initialized at startup, trying again in %i seconds",self._scan_interval)
 
         """Set up the Netatmo data handler. Do that at the end to have a good and proper init before calling it"""
         self.config_entry.async_on_unload(
@@ -428,7 +457,10 @@ class NetatmoDataHandler:
             return max(self._scan_interval, int(t_stop + 3600 + self._scan_interval - current))
 
     async def async_update(self, event_time: datetime) -> None:
-        """Update device. """
+        """Update device."""
+
+        if await self._do_complete_init_if_needed() is False:
+            _LOGGER.info("Netatmo integration not yet initialized, trying again in %i seconds", self._scan_interval)
 
         # no need all the time but fairly quick
         self.adjust_intervals_to_target()
@@ -738,24 +770,22 @@ class NetatmoDataHandler:
                         # that are sporting the real sensors wiht power and energy .... except that power is not
                         # available in the case of this kind of ecocounter
                         continue
-                    else:
-                        # if there is a bridge it means it is a leaf and should be kept...but only the electrical ones
-                        if module.bridge:
-                            name = module.entity_id
-                            sp = name.split("#")
-                            if len(sp) != 2:
-                                continue
-                            num = sp[1]
-                            try:
-                                num = int(num)
-                            except:
-                                continue
+                    elif module.bridge:
+                        name = module.entity_id
+                        sp = name.split("#")
+                        if len(sp) != 2:
+                            continue
+                        num = sp[1]
+                        try:
+                            num = int(num)
+                        except:
+                            continue
 
-                            if num > 5:
-                                if num == 6:
-                                    signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_GAS]
-                                else:
-                                    signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_WATER]
+                        if num > 5:
+                            if num == 6:
+                                signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_GAS]
+                            else:
+                                signals = [NETATMO_CREATE_SENSOR, NETATMO_CREATE_WATER]
 
             for signal in signals:
                 async_dispatcher_send(
