@@ -15,7 +15,6 @@ try:
     from . import pyatmo
     from .pyatmo.modules.device_types import (
         DeviceCategory as NetatmoDeviceCategory,
-        DeviceType,
         DeviceType as NetatmoDeviceType,
     )
 except Exception:  # pylint: disable=broad-except
@@ -764,7 +763,7 @@ class NetatmoDataHandler:
 
             if module.device_category == NetatmoDeviceCategory.meter:
 
-                if module.device_type == DeviceType.NLE:
+                if module.device_type == NetatmoDeviceType.NLE:
                     if module.modules or module.bridge is None:
                         # if we have an ecocounter as bridge, do not add its sensors as it is only its owned modules
                         # that are sporting the real sensors wiht power and energy .... except that power is not
