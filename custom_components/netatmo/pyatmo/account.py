@@ -1,4 +1,5 @@
 """Support for a Netatmo account."""
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,7 @@ from .const import (
     SETSTATE_ENDPOINT,
     RawData,
 )
-from .helpers import extract_raw_data_new
+from .helpers import extract_raw_data
 from .home import Home
 from .modules.module import MeasureInterval, Module
 
@@ -31,13 +32,11 @@ class AsyncAccount:
     """Async class of a Netatmo account."""
 
     def __init__(self, auth: AbstractAsyncAuth, favorite_stations: bool = True) -> None:
-        """Initialize the Netatmo account.
+        """Initialize the Netatmo account."""
 
-        Arguments:
-            auth {AbstractAsyncAuth} -- Authentication information with valid access token
-        """
         self.auth: AbstractAsyncAuth = auth
         self.user: str | None = None
+        self.all_homes_id: dict[str, str] = {}
         self.homes: dict[str, Home] = {}
         self.raw_data: RawData = {}
         self.favorite_stations: bool = favorite_stations
@@ -45,28 +44,47 @@ class AsyncAccount:
         self.modules: dict[str, Module] = {}
 
     def __repr__(self) -> str:
+        """Return the representation."""
+
         return (
             f"{self.__class__.__name__}(user={self.user}, home_ids={self.homes.keys()}"
         )
 
-    def process_topology(self) -> None:
+    def process_topology(self, disabled_homes_ids: list[str] | None = None) -> None:
         """Process topology information from /homesdata."""
+
+        if disabled_homes_ids is None:
+            disabled_homes_ids = []
+
         for home in self.raw_data["homes"]:
-            if (home_id := home["id"]) in self.homes:
+
+            home_id = home.get("id", "Unknown")
+            home_name = home.get("name", "Unknown")
+            self.all_homes_id[home_id] = home_name
+
+            if home_id in disabled_homes_ids:
+                if home_id in self.homes:
+                    del self.homes[home_id]
+                continue
+
+            if home_id in self.homes:
                 self.homes[home_id].update_topology(home)
             else:
                 self.homes[home_id] = Home(self.auth, raw_data=home)
 
-    async def async_update_topology(self) -> None:
+    async def async_update_topology(
+        self, disabled_homes_ids: list[str] | None = None
+    ) -> None:
         """Retrieve topology data from /homesdata."""
+
         resp = await self.auth.async_post_api_request(
             endpoint=GETHOMESDATA_ENDPOINT,
         )
-        self.raw_data = extract_raw_data_new(await resp.json(), "homes")
+        self.raw_data = extract_raw_data(await resp.json(), "homes")
 
         self.user = self.raw_data.get("user", {}).get("email")
 
-        self.process_topology()
+        self.process_topology(disabled_homes_ids=disabled_homes_ids)
 
     async def async_update_status(self, home_id: str) -> None:
         """Retrieve status data from /homestatus."""
@@ -74,8 +92,8 @@ class AsyncAccount:
             endpoint=GETHOMESTATUS_ENDPOINT,
             params={"home_id": home_id},
         )
-        raw_data = extract_raw_data_new(await resp.json(), HOME)
-        await self.homes[home_id].update(raw_data)
+        raw_data = extract_raw_data(await resp.json(), HOME)
+        await self.homes[home_id].update(raw_data, do_raise_for_reachability_error=True)
 
     async def async_update_events(self, home_id: str) -> None:
         """Retrieve events from /getevents."""
@@ -83,7 +101,7 @@ class AsyncAccount:
             endpoint=GETEVENTS_ENDPOINT,
             params={"home_id": home_id},
         )
-        raw_data = extract_raw_data_new(await resp.json(), HOME)
+        raw_data = extract_raw_data(await resp.json(), HOME)
         await self.homes[home_id].update(raw_data)
 
     async def async_update_weather_stations(self) -> None:
@@ -103,11 +121,15 @@ class AsyncAccount:
         home_id: str,
         module_id: str,
         start_time: int | None = None,
+        end_time: int | None = None,
         interval: MeasureInterval = MeasureInterval.HOUR,
         days: int = 7,
     ) -> None:
+        """Retrieve measures data from /getmeasure."""
+
         await getattr(self.homes[home_id].modules[module_id], "async_update_measures")(
             start_time=start_time,
+            end_time=end_time,
             interval=interval,
             days=days,
         )
@@ -124,6 +146,7 @@ class AsyncAccount:
         area_id: str = str(uuid4()),
     ) -> str:
         """Register public weather area to monitor."""
+
         self.public_weather_areas[area_id] = modules.PublicWeatherArea(
             lat_ne,
             lon_ne,
@@ -135,7 +158,7 @@ class AsyncAccount:
         return area_id
 
     async def async_update_public_weather(self, area_id: str) -> None:
-        """Retrieve status data from /getpublicdata"""
+        """Retrieve status data from /getpublicdata."""
         params = {
             "lat_ne": self.public_weather_areas[area_id].location.lat_ne,
             "lon_ne": self.public_weather_areas[area_id].location.lon_ne,
@@ -161,7 +184,7 @@ class AsyncAccount:
     ) -> None:
         """Retrieve status data from <endpoint>."""
         resp = await self.auth.async_post_api_request(endpoint=endpoint, params=params)
-        raw_data = extract_raw_data_new(await resp.json(), tag)
+        raw_data = extract_raw_data(await resp.json(), tag)
         await self.update_devices(raw_data, area_id)
 
     async def async_set_state(self, home_id: str, data: dict[str, Any]) -> None:
@@ -188,7 +211,6 @@ class AsyncAccount:
         area_id: str | None = None,
     ) -> None:
         """Update device states."""
-        home_id_none = False
         for device_data in raw_data.get("devices", {}):
             if home_id := device_data.get(
                 "home_id",
@@ -215,15 +237,7 @@ class AsyncAccount:
                     {HOME: {"modules": [normalize_weather_attributes(device_data)]}},
                 )
             else:
-                LOG.debug(
-                    "No home %s of device %s (%s) found.",
-                    home_id,
-                    device_data["_id"],
-                    device_data["type"],
-                )
-                if home_id is None and not home_id_none:
-                    home_id_none = True
-                    LOG.debug("home %s raw: %s", home_id, raw_data)
+                LOG.debug("No home %s found.", home_id)
 
             for module_data in device_data.get("modules", []):
                 module_data["home_id"] = home_id

@@ -1,0 +1,16 @@
+# https://www.home-assistant.io/integrations/default_config/
+default_config:
+
+# https://www.home-assistant.io/integrations/logger/
+logger:
+  default: info
+  logs:
+    custom_components.netatmo: debug
+    custom_components.netatmo.pyatmo: debug
+    custom_components.netatmo.pyatmo.modules: debug
+# If you need to debug uncommment the line below (doc: https://www.home-assistant.io/integrations/debugpy/)
+#debugpy:
+#  start: true
+#  wait: true
+  #port: 5678
+

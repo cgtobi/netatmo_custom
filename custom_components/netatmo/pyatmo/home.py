@@ -1,4 +1,5 @@
 """Module to represent a Netatmo home."""
+
 from __future__ import annotations
 
 import logging
@@ -15,10 +16,11 @@ from .const import (
     SETSTATE_ENDPOINT,
     SETTHERMMODE_ENDPOINT,
     SWITCHHOMESCHEDULE_ENDPOINT,
+    SYNCHOMESCHEDULE_ENDPOINT,
     RawData,
 )
 from .event import Event
-from .exceptions import InvalidState, NoSchedule
+from .exceptions import InvalidSchedule, InvalidState, NoSchedule, ApiHomeReachabilityError
 from .modules import Module
 from .person import Person
 from .room import Room
@@ -43,6 +45,8 @@ class Home:
     events: dict[str, Event]
 
     def __init__(self, auth: AbstractAsyncAuth, raw_data: RawData) -> None:
+        """Initialize a Netatmo home instance."""
+
         self.auth = auth
         self.entity_id = raw_data["id"]
         self.name = raw_data.get("name", "Unknown")
@@ -67,7 +71,9 @@ class Home:
         }
         self.events = {}
 
-    def get_module(self, module) -> Module:
+    def get_module(self, module: dict) -> Module:
+        """Return module."""
+
         try:
             return getattr(modules, module["type"])(
                 home=self,
@@ -81,15 +87,14 @@ class Home:
             )
 
     def update_topology(self, raw_data: RawData) -> None:
+        """Update topology."""
+
         self.name = raw_data.get("name", "Unknown")
 
         raw_modules = raw_data.get("modules", [])
         for module in raw_modules:
             if (module_id := module["id"]) not in self.modules:
-                self.modules[module_id] = getattr(modules, module["type"])(
-                    home=self,
-                    module=module,
-                )
+                self.modules[module_id] = self.get_module(module)
             else:
                 self.modules[module_id].update_topology(module)
 
@@ -117,25 +122,37 @@ class Home:
             for s in raw_data.get(SCHEDULES, [])
         }
 
-    async def update(self, raw_data: RawData) -> None:
+    async def update(self, raw_data: RawData, do_raise_for_reachability_error=False) -> None:
+        """Update home with the latest data."""
+        has_error = False
         for module in raw_data.get("errors", []):
+            has_error = True
             await self.modules[module["id"]].update({})
 
         data = raw_data["home"]
 
+        has_an_update = False
         for module in data.get("modules", []):
+            has_an_update = True
             if module["id"] not in self.modules:
                 self.update_topology({"modules": [module]})
             await self.modules[module["id"]].update(module)
 
         for room in data.get("rooms", []):
+            has_an_update = True
             self.rooms[room["id"]].update(room)
 
         self.events = {
             s["id"]: Event(home_id=self.entity_id, raw_data=s)
             for s in data.get(EVENTS, [])
         }
+        if len(self.events) > 0:
+            has_an_update = True
+
+        has_one_module_reachable = False
         for module in self.modules.values():
+            if module.reachable:
+                has_one_module_reachable = True
             if hasattr(module, "events"):
                 setattr(
                     module,
@@ -147,8 +164,20 @@ class Home:
                     ],
                 )
 
+        if (do_raise_for_reachability_error
+            and has_error
+            and has_one_module_reachable is False
+            and has_an_update is False
+        ):
+            raise ApiHomeReachabilityError(
+                "No Home update could be performed, all modules unreachable and not updated",
+            )
+
+
+
     def get_selected_schedule(self) -> Schedule | None:
         """Return selected schedule for given home."""
+
         return next(
             (schedule for schedule in self.schedules.values() if schedule.selected),
             None,
@@ -156,22 +185,24 @@ class Home:
 
     def is_valid_schedule(self, schedule_id: str) -> bool:
         """Check if valid schedule."""
+
         return schedule_id in self.schedules
 
     def has_otm(self) -> bool:
-        for room in self.rooms.values():
-            if "OTM" in room.device_types:
-                return True
-        return False
+        """Check if any room has an OTM device."""
+
+        return any("OTM" in room.device_types for room in self.rooms.values())
 
     def get_hg_temp(self) -> float | None:
         """Return frost guard temperature value for given home."""
+
         if (schedule := self.get_selected_schedule()) is None:
             return None
         return schedule.hg_temp
 
     def get_away_temp(self) -> float | None:
         """Return configured away temperature value for given home."""
+
         if (schedule := self.get_selected_schedule()) is None:
             return None
         return schedule.away_temp
@@ -248,6 +279,7 @@ class Home:
         person_id: str | None = None,
     ) -> ClientResponse:
         """Mark a person as away or set the whole home to being empty."""
+
         post_params = {"home_id": self.entity_id}
         if person_id:
             post_params["person_id"] = person_id
@@ -256,7 +288,91 @@ class Home:
             params=post_params,
         )
 
+    async def async_set_schedule_temperatures(
+        self,
+        zone_id: int,
+        temps: dict[str, int],
+    ) -> None:
+        """Set the scheduled room temperature for the given schedule ID."""
+
+        selected_schedule = self.get_selected_schedule()
+
+        if selected_schedule is None:
+            raise NoSchedule("Could not determine selected schedule.")
+
+        zones = []
+
+        timetable_entries = [
+            {
+                "m_offset": timetable_entry.m_offset,
+                "zone_id": timetable_entry.zone_id,
+            }
+            for timetable_entry in selected_schedule.timetable
+        ]
+
+        for zone in selected_schedule.zones:
+            new_zone = {
+                "id": zone.entity_id,
+                "name": zone.name,
+                "type": zone.type,
+                "rooms": [],
+            }
+
+            for room in zone.rooms:
+                temp = room.therm_setpoint_temperature
+                if zone.entity_id == zone_id and room.entity_id in temps:
+                    temp = temps[room.entity_id]
+
+                new_zone["rooms"].append(
+                    {"id": room.entity_id, "therm_setpoint_temperature": temp},
+                )
+
+            zones.append(new_zone)
+
+        schedule = {
+            "away_temp": selected_schedule.away_temp,
+            "hg_temp": selected_schedule.hg_temp,
+            "timetable": timetable_entries,
+            "zones": zones,
+        }
+
+        await self.async_sync_schedule(selected_schedule.entity_id, schedule)
+
+    async def async_sync_schedule(
+        self,
+        schedule_id: str,
+        schedule: dict[str, Any],
+    ) -> None:
+        """Modify an existing schedule."""
+        if not is_valid_schedule(schedule):
+            raise InvalidSchedule("Data for '/synchomeschedule' contains errors.")
+        LOG.debug(
+            "Setting schedule (%s) for home (%s) to %s",
+            schedule_id,
+            self.entity_id,
+            schedule,
+        )
+
+        resp = await self.auth.async_post_api_request(
+            endpoint=SYNCHOMESCHEDULE_ENDPOINT,
+            params={
+                "params": {
+                    "home_id": self.entity_id,
+                    "schedule_id": schedule_id,
+                    "name": "Default",
+                },
+                "json": schedule,
+            },
+        )
+
+        return (await resp.json()).get("status") == "ok"
+
 
 def is_valid_state(data: dict[str, Any]) -> bool:
     """Check set state data."""
     return data is not None
+
+
+def is_valid_schedule(schedule: dict[str, Any]) -> bool:
+    """Check schedule."""
+    return schedule is not None

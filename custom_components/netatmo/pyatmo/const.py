@@ -1,7 +1,8 @@
 """Common constants."""
+
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 ERRORS: dict[int, str] = {
     400: "Bad request",
@@ -15,7 +16,7 @@ ERRORS: dict[int, str] = {
 }
 
 # Special types
-RawData = Dict[str, Any]
+RawData = dict[str, Any]
 
 DEFAULT_BASE_URL: str = "https://api.netatmo.com/"
 
@@ -32,6 +33,7 @@ SETTHERMMODE_ENDPOINT = "api/setthermmode"
 SETROOMTHERMPOINT_ENDPOINT = "api/setroomthermpoint"
 GETROOMMEASURE_ENDPOINT = "api/getroommeasure"
 SWITCHHOMESCHEDULE_ENDPOINT = "api/switchhomeschedule"
+SYNCHOMESCHEDULE_ENDPOINT = "api/synchomeschedule"
 
 GETHOMEDATA_ENDPOINT = "api/gethomedata"
 GETCAMERAPICTURE_ENDPOINT = "api/getcamerapicture"
@@ -50,16 +52,18 @@ GETPUBLIC_DATA_ENDPOINT = "api/getpublicdata"
 AUTHORIZATION_HEADER = "Authorization"
 
 # Possible scops
-ALL_SCOPES = [
+ALL_SCOPES: list[str] = [
     "access_camera",  # Netatmo camera products
     "access_doorbell",  # Netatmo Smart Video Doorbell
     "access_presence",  # Netatmo Smart Outdoor Camera
     "read_bubendorff",  # Bubbendorf shutters
+    "read_bfi",  # BTicino IP
     "read_camera",  # Netatmo camera products
     "read_carbonmonoxidedetector",  # Netatmo CO sensor
     "read_doorbell",  # Netatmo Smart Video Doorbell
     "read_homecoach",  # Netatmo Smart Indoor Air Quality Monitor
     "read_magellan",  # Legrand Wiring device or Electrical panel products
+    "read_mhs1",  # Bticino MyHome Server 1 modules
     "read_mx",  # BTicino Classe 300 EOS
     "read_presence",  # Netatmo Smart Outdoor Camera
     "read_smarther",  # Smarther with Netatmo thermostat
@@ -67,8 +71,10 @@ ALL_SCOPES = [
     "read_station",  # Netatmo weather station
     "read_thermostat",  # Netatmo climate products
     "write_bubendorff",  # Bubbendorf shutters
+    "write_bfi",  # BTicino IP
     "write_camera",  # Netatmo camera products
     "write_magellan",  # Legrand Wiring device or Electrical panel products
+    "write_mhs1",  # Bticino MyHome Server 1 modules
     "write_mx",  # BTicino Classe 300 EOS
     "write_presence",  # Netatmo Smart Outdoor Camera
     "write_smarther",  # Smarther products
@@ -96,3 +102,6 @@ ACCESSORY_WIND_ANGLE_TYPE = "wind_angle"
 ACCESSORY_WIND_TIME_TYPE = "wind_timeutc"
 ACCESSORY_GUST_STRENGTH_TYPE = "gust_strength"
 ACCESSORY_GUST_ANGLE_TYPE = "gust_angle"
+
+# 2 days of dynamic historical data stored
+MAX_HISTORY_TIME_FRAME = 24 * 2 * 3600
