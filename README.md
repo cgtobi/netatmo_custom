@@ -41,5 +41,4 @@ We had power entities before, but to use it in homeassitant entity dashboard we 
 What may be better now:
 
 - Handling of API throttling is more exact we may have less lacunar data now, and better compliance with netatmo rate limites
-- The schedules : now are limited to temperature schedules
 - Some device that was not exposing power (and now energy) are now exposing it
