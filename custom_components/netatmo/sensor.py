@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-import logging
 from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 from typing import Any, cast
 
 try:
-    from .pyatmo.modules.module import EnergyHistoryMixin, MeasureInterval
     from . import pyatmo
     from .pyatmo.modules import PublicWeatherArea
+    from .pyatmo.modules.module import EnergyHistoryMixin, MeasureInterval
 except Exception:  # pylint: disable=broad-except
-    from pyatmo.modules.module import EnergyHistoryMixin,MeasureInterval
     import pyatmo
     from pyatmo.modules import PublicWeatherArea
+    from pyatmo.modules.module import EnergyHistoryMixin, MeasureInterval
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -32,13 +32,14 @@ from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
     EntityCategory,
-    UnitOfPower,
     UnitOfEnergy,
+    UnitOfPower,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSoundPressure,
     UnitOfSpeed,
-    UnitOfTemperature, UnitOfVolume,
+    UnitOfTemperature,
+    UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -58,12 +59,21 @@ from .const import (
     DOMAIN,
     NETATMO_CREATE_BATTERY,
     NETATMO_CREATE_ENERGY,
+    NETATMO_CREATE_GAS,
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
+    NETATMO_CREATE_WATER,
     NETATMO_CREATE_WEATHER_SENSOR,
-    SIGNAL_NAME, NETATMO_CREATE_GAS, NETATMO_CREATE_WATER,
+    SIGNAL_NAME,
 )
-from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom, ENERGY_MEASURE
+from .data_handler import (
+    ENERGY_MEASURE,
+    HOME,
+    PUBLIC,
+    NetatmoDataHandler,
+    NetatmoDevice,
+    NetatmoRoom,
+)
 from .entity import (
     NetatmoBaseEntity,
     NetatmoModuleEntity,
@@ -695,7 +705,7 @@ class NetatmoBaseSensor(NetatmoModuleEntity, SensorEntity):
 
     @abstractmethod
     def complement_publishers(self, netatmo_device):
-        """abstract method to fill publishers"""
+        """Abstract method to fill publishers"""
 
     @callback
     def async_update_callback(self) -> None:
@@ -774,17 +784,6 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                 },
             ]
         )
-
-    def update_measures_num_calls(self):
-
-        #check if the next call will result in 0 API call as it will be a reset
-        # netatmo is only keeping energy measures for 2.5 days, we reset every day
-        end = datetime.now()
-        start = self._current_start_anchor
-        if end.day != start.day:
-            return 0
-
-        return 1
 
     async def async_update_energy(self, **kwargs):
 

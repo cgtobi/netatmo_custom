@@ -58,9 +58,9 @@ class NetatmoBaseEntity(Entity):
                 )
             elif "home_id" in publisher:
                 await self.data_handler.subscribe(
-                    publisher=publisher["name"],
-                    signal_name=signal_name,
-                    update_callback=self.async_update_callback,
+                    publisher["name"],
+                    signal_name,
+                    self.async_update_callback,
                     home_id=publisher["home_id"],
                 )
 

@@ -103,6 +103,11 @@ PUBLISHERS = {
 # 50 requests every 10 seconds
 # 500 requests every hour
 
+# the system will ensure that we never overcross neither CALL_PER_HOUR or CALL_PER_TEN_SECONDS
+# whatever are the other numbers of the number of devices we have
+# (each device need a call for energy, can grow a lot)
+# There is a rolling buffer of calls to be sure of what has been called in teh last
+# 10s or hour and take decisions based on that
 
 CALL_PER_HOUR = "CALL_PER_HOUR"
 CALL_PER_TEN_SECONDS = "CALL_PER_10S"
@@ -112,7 +117,7 @@ NETATMO_USER_CALL_LIMITS = {
     CALL_PER_HOUR: 20,        # 20 to comply with the global limit of (20 * number of users) requests every hour
     CALL_PER_TEN_SECONDS: 2,  # 2  to comply with the global limit of (2 * number of users) requests every 10 seconds
     ACCOUNT: 10800,
-    HOME: 150,
+    HOME: 200, # 200s between calls it means 18 calls per hours
     WEATHER: 600,
     AIR_CARE: 300,
     PUBLIC: 600,
@@ -133,6 +138,9 @@ NETATMO_DEV_CALL_LIMITS = {
     SCAN_INTERVAL: 5
 }
 
+# this is for the dynamic API rate limiting adjustement to deal with rare occasions
+# where there may be a need to go lower in API consumption (and then back higher
+# to get to an equilibrium)
 CPH_ADJUSTEMENT_DOWN = 0.8
 CPH_ADJUSTEMENT_BACK_UP = 1.1
 
@@ -236,7 +244,7 @@ class NetatmoDataHandler:
 
         self._10s_rate_limit = limits[CALL_PER_TEN_SECONDS]
 
-        self.rolling_hour = []
+        self.rolling_hour = [] # used to store API calls and have a rolling windws of calls
         self._adjusted_hourly_rate_limit = None
         self._last_cph_change = None
 
@@ -246,7 +254,7 @@ class NetatmoDataHandler:
         self.adjust_per_scan_numbers()
 
     def add_api_call(self, n):
-
+        """Add an API call to the rolling window of calls."""
         current = time()
         for i in range(n):
             self.rolling_hour.append(current)
@@ -254,7 +262,7 @@ class NetatmoDataHandler:
         while len(self.rolling_hour) > 0 and current - self.rolling_hour[0] > 3600:
             self.rolling_hour.pop(0)
 
-    def get_current_call_per_hour(self):
+    def get_current_calls_count_per_hour(self):
         return int(len(self.rolling_hour))
 
     async def _init_update_topology_if_needed(self):
@@ -467,7 +475,7 @@ class NetatmoDataHandler:
         # keep cph up to date whatever happens (time increment)
         self.add_api_call(0)
 
-        cph_init = self.get_current_call_per_hour()
+        cph_init = self.get_current_calls_count_per_hour()
 
         num_call = max(0, min(self._max_call_per_interval, self._adjusted_hourly_rate_limit - cph_init))
 
@@ -475,7 +483,7 @@ class NetatmoDataHandler:
             delta_sleep = self._scan_interval / (3.0 * num_call)
         else:
             _LOGGER.info("Getting 0 approved calls: adjusted limit : %f current cph: %i",
-                         self._adjusted_hourly_rate_limit, self.get_current_call_per_hour())
+                         self._adjusted_hourly_rate_limit, self.get_current_calls_count_per_hour())
             delta_sleep = 0
 
         current = int(time())
@@ -507,7 +515,7 @@ class NetatmoDataHandler:
             if delta_sleep > 0:
                 await asyncio.sleep(delta_sleep)
 
-        cph = self.get_current_call_per_hour()
+        cph = self.get_current_calls_count_per_hour()
         current = int(time())
         msg = "Calls per hour: %i , num call asked: %i num candidates: %i num call predicted : %i  num pub: %i"
         _LOGGER.debug(msg, cph, num_call, len(candidates), num_predicted_calls, len(self._sorted_publisher))
@@ -761,15 +769,19 @@ class NetatmoDataHandler:
 
             signals = netatmo_type_signal_map.get(module.device_category, [])
 
-            if module.device_category == NetatmoDeviceCategory.meter:
 
-                if module.device_type == NetatmoDeviceType.NLE:
+            # unfortunately the ecoounter is handled in a very peculiar way
+            # it is its own bridge, and sensor are hardcoded by name
+            if (module.device_category == NetatmoDeviceCategory.meter and
+                    module.device_type == NetatmoDeviceType.NLE):
                     if module.modules or module.bridge is None:
                         # if we have an ecocounter as bridge, do not add its sensors as it is only its owned modules
                         # that are sporting the real sensors wiht power and energy .... except that power is not
                         # available in the case of this kind of ecocounter
                         continue
                     elif module.bridge:
+                        # sensor are encoded by name unfortunately here :(
+
                         name = module.entity_id
                         sp = name.split("#")
                         if len(sp) != 2:
