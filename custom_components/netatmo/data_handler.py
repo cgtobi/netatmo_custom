@@ -639,8 +639,6 @@ class NetatmoDataHandler:
             kwargs = {"disabled_homes_ids": self.config_entry.options.get(CONF_DISABLED_HOMES, [])}
 
         interval = int(self._limits[publisher])
-        # n = len(self._sorted_publisher)
-
         self.publisher[signal_name] = NetatmoPublisher(
             name=signal_name,
             interval=interval,
@@ -652,8 +650,6 @@ class NetatmoDataHandler:
             kwargs=kwargs,
         )
 
-        # do that only if it is on account, is get measure or other ...
-        # don't do too much here has it will kill the number of calls
         try:
             await self.async_fetch_data(signal_name, update_only=update_only)
         except KeyError:
@@ -688,7 +684,7 @@ class NetatmoDataHandler:
 
 
     async def unsubscribe(
-            self, signal_name: str, update_callback: CALLBACK_TYPE | None
+        self, signal_name: str, update_callback: CALLBACK_TYPE | None
     ) -> None:
         """Unsubscribe from publisher."""
         if update_callback not in self.publisher[signal_name].subscriptions:
