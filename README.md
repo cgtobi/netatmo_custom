@@ -34,6 +34,8 @@ Once this integration is properly installed
 
 We had power entities before, but to use it in homeassitant entity dashboard we had to do a Riemann sum, and well it was really inexact...so now we do have now **sensor.mydevice_energy** going straight form the netatmo API, and refined with some power measurement.
 
+### Adding Support for the Legrand Ecocounter ((NLE) with its Water and Gaz sensors
+
 ### Probably some new bugs and some fixes too :)
 
 What may be better now:
