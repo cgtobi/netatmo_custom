@@ -39,6 +39,7 @@ from . import api
 from .const import (
     AUTH,
     CONF_CLOUDHOOK_URL,
+    CONF_DISABLED_HOMES,
     DATA_CAMERAS,
     DATA_DEVICE_IDS,
     DATA_EVENTS,
@@ -61,16 +62,20 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 MAX_WEBHOOK_RETRIES = 3
 
 
+def _reset_hass_domain(hass: HomeAssistant):
+    hass.data[DOMAIN][DATA_PERSONS] = {}
+    hass.data[DOMAIN][DATA_DEVICE_IDS] = {}
+    hass.data[DOMAIN][DATA_SCHEDULES] = {}
+    hass.data[DOMAIN][DATA_HOMES] = {}
+    hass.data[DOMAIN][DATA_EVENTS] = {}
+    hass.data[DOMAIN][DATA_CAMERAS] = {}
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Netatmo component."""
-    hass.data[DOMAIN] = {
-        DATA_PERSONS: {},
-        DATA_DEVICE_IDS: {},
-        DATA_SCHEDULES: {},
-        DATA_HOMES: {},
-        DATA_EVENTS: {},
-        DATA_CAMERAS: {},
-    }
+    hass.data[DOMAIN] = {}
+
+    _reset_hass_domain(hass)
 
     return True
 
@@ -217,6 +222,24 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
     """Handle signals of config entry being updated."""
     async_dispatcher_send(hass, f"signal-{DOMAIN}-public-update-{entry.entry_id}")
 
+    # check if the number of supported homes has changed
+    local_data_handler = hass.data[DOMAIN][entry.entry_id][DATA_HANDLER]
+    account_home = local_data_handler.account.all_homes_id
+
+    # if there is only one home in this setup, no need to check anything
+    if account_home is not None and len(account_home) > 1:
+        disabled_homes = entry.options.get(CONF_DISABLED_HOMES, {})
+        enabled_homes = {
+            home_id for home_id in account_home if home_id not in disabled_homes
+        }
+        homes = local_data_handler.account.homes # it can have more homes, the public ones
+        current_homes = {
+            home_id for home_id in homes if home_id in account_home
+        }
+        if current_homes != enabled_homes:
+            _LOGGER.debug("Call reload to handle supported homes changes %s", homes)
+            _reset_hass_domain(hass)
+            await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""

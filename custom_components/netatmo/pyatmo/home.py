@@ -20,7 +20,12 @@ from .const import (
     RawData,
 )
 from .event import Event
-from .exceptions import InvalidSchedule, InvalidState, NoSchedule, ApiHomeReachabilityError
+from .exceptions import (
+    ApiHomeReachabilityError,
+    InvalidSchedule,
+    InvalidState,
+    NoSchedule,
+)
 from .modules import Module
 from .person import Person
 from .room import Room
@@ -122,7 +127,9 @@ class Home:
             for s in raw_data.get(SCHEDULES, [])
         }
 
-    async def update(self, raw_data: RawData, do_raise_for_reachability_error=False) -> None:
+    async def update(
+        self, raw_data: RawData, do_raise_for_reachability_error=False
+    ) -> None:
         """Update home with the latest data."""
         has_error = False
         for module in raw_data.get("errors", []):
@@ -141,6 +148,10 @@ class Home:
         for room in data.get("rooms", []):
             has_an_update = True
             self.rooms[room["id"]].update(room)
+
+        for person_status in data.get("persons", []):
+            if person := self.persons.get(person_status["id"]):
+                person.update(person_status)
 
         self.events = {
             s["id"]: Event(home_id=self.entity_id, raw_data=s)
@@ -164,7 +175,8 @@ class Home:
                     ],
                 )
 
-        if (do_raise_for_reachability_error
+        if (
+            do_raise_for_reachability_error
             and has_error
             and has_one_module_reachable is False
             and has_an_update is False
@@ -172,8 +184,6 @@ class Home:
             raise ApiHomeReachabilityError(
                 "No Home update could be performed, all modules unreachable and not updated",
             )
-
-
 
     def get_selected_schedule(self) -> Schedule | None:
         """Return selected schedule for given home."""

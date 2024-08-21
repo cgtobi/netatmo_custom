@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 from typing import Any, cast
 
 try:
     from . import pyatmo
     from .pyatmo.modules import PublicWeatherArea
+    from .pyatmo.modules.module import EnergyHistoryMixin, MeasureInterval
 except Exception:  # pylint: disable=broad-except
     import pyatmo
     from pyatmo.modules import PublicWeatherArea
+    from pyatmo.modules.module import EnergyHistoryMixin, MeasureInterval
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -28,12 +32,14 @@ from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
     EntityCategory,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfPrecipitationDepth,
     UnitOfPressure,
     UnitOfSoundPressure,
     UnitOfSpeed,
     UnitOfTemperature,
+    UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -52,12 +58,22 @@ from .const import (
     DATA_HANDLER,
     DOMAIN,
     NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_ENERGY,
+    NETATMO_CREATE_GAS,
     NETATMO_CREATE_ROOM_SENSOR,
     NETATMO_CREATE_SENSOR,
+    NETATMO_CREATE_WATER,
     NETATMO_CREATE_WEATHER_SENSOR,
     SIGNAL_NAME,
 )
-from .data_handler import HOME, PUBLIC, NetatmoDataHandler, NetatmoDevice, NetatmoRoom
+from .data_handler import (
+    ENERGY_MEASURE,
+    HOME,
+    PUBLIC,
+    NetatmoDataHandler,
+    NetatmoDevice,
+    NetatmoRoom,
+)
 from .entity import (
     NetatmoBaseEntity,
     NetatmoModuleEntity,
@@ -387,6 +403,30 @@ BATTERY_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
     device_class=SensorDeviceClass.BATTERY,
 )
 
+ENERGY_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
+    key="energy",
+    netatmo_name="sum_energy_elec",
+    native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    device_class=SensorDeviceClass.ENERGY,
+)
+
+GAS_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
+    key="gas",
+    netatmo_name="sum_energy_elec",
+    native_unit_of_measurement=UnitOfVolume.LITERS,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    device_class=SensorDeviceClass.GAS,
+)
+
+WATER_SENSOR_DESCRIPTION = NetatmoSensorEntityDescription(
+    key="water",
+    netatmo_name="sum_energy_elec",
+    native_unit_of_measurement=UnitOfVolume.LITERS,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+    device_class=SensorDeviceClass.WATER,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -402,6 +442,58 @@ async def async_setup_entry(
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, NETATMO_CREATE_BATTERY, _create_battery_entity)
+    )
+
+    @callback
+    def _create_energy_entity(netatmo_device: NetatmoDevice) -> None:
+
+        if ENERGY_SENSOR_DESCRIPTION.netatmo_name in netatmo_device.device.features or hasattr(netatmo_device.device,
+                                                                                               ENERGY_SENSOR_DESCRIPTION.netatmo_name):
+            _LOGGER.debug(
+                "Adding %s energy sensor %s",
+                netatmo_device.device.device_category,
+                netatmo_device.device.name,
+            )
+            entity = NetatmoEnergySensor(netatmo_device, description=ENERGY_SENSOR_DESCRIPTION)
+            async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_ENERGY, _create_energy_entity)
+    )
+
+
+    @callback
+    def _create_gas_entity(netatmo_device: NetatmoDevice) -> None:
+
+        if GAS_SENSOR_DESCRIPTION.netatmo_name in netatmo_device.device.features or hasattr(netatmo_device.device,
+                                                                                               GAS_SENSOR_DESCRIPTION.netatmo_name):
+            _LOGGER.debug(
+                "Adding %s gas sensor %s",
+                netatmo_device.device.device_category,
+                netatmo_device.device.name,
+            )
+            entity = NetatmoEnergySensor(netatmo_device, description=GAS_SENSOR_DESCRIPTION)
+            async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_GAS, _create_gas_entity)
+    )
+
+    @callback
+    def _create_water_entity(netatmo_device: NetatmoDevice) -> None:
+
+        if WATER_SENSOR_DESCRIPTION.netatmo_name in netatmo_device.device.features or hasattr(netatmo_device.device,
+                                                                                               WATER_SENSOR_DESCRIPTION.netatmo_name):
+            _LOGGER.debug(
+                "Adding %s water sensor %s",
+                netatmo_device.device.device_category,
+                netatmo_device.device.name,
+            )
+            entity = NetatmoEnergySensor(netatmo_device, description=WATER_SENSOR_DESCRIPTION)
+            async_add_entities([entity])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, NETATMO_CREATE_WATER, _create_water_entity)
     )
 
     @callback
@@ -590,7 +682,7 @@ class NetatmoClimateBatterySensor(NetatmoModuleEntity, SensorEntity):
         self._attr_native_value = self.device.battery
 
 
-class NetatmoSensor(NetatmoModuleEntity, SensorEntity):
+class NetatmoBaseSensor(NetatmoModuleEntity, SensorEntity):
     """Implementation of a Netatmo sensor."""
 
     entity_description: NetatmoSensorEntityDescription
@@ -605,6 +697,44 @@ class NetatmoSensor(NetatmoModuleEntity, SensorEntity):
         super().__init__(netatmo_device)
         self.entity_description = description
 
+        self._attr_unique_id = (
+            f"{self.device.entity_id}-{self.device.entity_id}-{description.key}"
+        )
+
+        self.complement_publishers(netatmo_device)
+
+    @abstractmethod
+    def complement_publishers(self, netatmo_device):
+        """Abstract method to fill publishers"""
+
+    @callback
+    def async_update_callback(self) -> None:
+        """Update the entity's state."""
+
+        if self.entity_description.key != "reachable":
+
+            if not self.device.reachable:
+                if self.available:
+                    self._attr_available = False
+                return
+
+            if (state := getattr(self.device, self.entity_description.key)) is None:
+                return
+        else:
+            state = self.device.reachable
+            if state is None:
+                state = False
+
+        self._attr_available = True
+        self._attr_native_value = state
+
+        self.async_write_ha_state()
+
+
+class NetatmoSensor(NetatmoBaseSensor):
+    """Implementation of a generic Netatmo sensor."""
+
+    def complement_publishers(self, netatmo_device):
         self._publishers.extend(
             [
                 {
@@ -615,24 +745,94 @@ class NetatmoSensor(NetatmoModuleEntity, SensorEntity):
             ]
         )
 
-        self._attr_unique_id = (
-            f"{self.device.entity_id}-{self.device.entity_id}-{description.key}"
+
+class NetatmoEnergySensor(NetatmoBaseSensor):
+    """Implementation of an energy Netatmo sensor."""
+
+    _last_end: datetime | None
+    _last_start: datetime | None
+    _current_start_anchor: datetime | None
+    _last_val_sent: float | None = None
+
+    def __init__(
+            self,
+            netatmo_device: NetatmoDevice,
+            description: NetatmoSensorEntityDescription
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(netatmo_device, description)
+
+        strt = datetime.now()
+        if isinstance(self.device, EnergyHistoryMixin):
+            self.device.reset_measures(start_power_time=strt ,in_reset=False)
+
+        self._current_start_anchor = datetime.fromisoformat("2024-07-24 00:00:00")
+        self._last_val_sent = None
+
+    def complement_publishers(self, netatmo_device):
+        self._publishers.extend(
+            [
+                {
+                    "name": ENERGY_MEASURE,
+                    "target_module": self,
+                    SIGNAL_NAME: self._attr_unique_id,
+                },
+                {
+                    "name": HOME,
+                    "home_id": self.home.entity_id,
+                    SIGNAL_NAME: netatmo_device.signal_name,
+                },
+            ]
         )
+
+    async def async_update_energy(self, **kwargs):
+
+        if isinstance(self.device, EnergyHistoryMixin) is False:
+            return 0
+
+        end = datetime.now()
+        start = self._current_start_anchor
+
+        #netatmo is only keeping energy measures for 2.5 days, we reset every day
+        if end.day != start.day:
+            #force everything at 0
+            self.device.reset_measures(start_power_time=end)
+            self._current_start_anchor = end
+            return 0
+
+        end_time = int(end.timestamp())
+        start_time = int(start.timestamp())
+
+        num_calls = await self.device.async_update_measures(start_time=start_time,
+                                                            end_time=end_time,
+                                                            interval=MeasureInterval.HALF_HOUR)
+        # let the subsequent callback update the state energy data  and the availability
+        return num_calls
 
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        if not self.device.reachable:
-            if self.available:
-                self._attr_available = False
+
+        if isinstance(self.device, EnergyHistoryMixin) is False:
+            #please the linter ....
             return
 
-        if (state := getattr(self.device, self.entity_description.key)) is None:
-            return
+        if self.device.in_reset is False:
+            v, delta_energy = self.device.get_sum_energy_elec_power_adapted(conservative=False)
+            new_val = v + delta_energy
+            prev_energy = self._last_val_sent
+            if prev_energy is not None and prev_energy > new_val:
+                new_val = prev_energy
+            state = new_val
+            _LOGGER.debug("UPDATE ENERGY FOR: %s delta: %s nrjAPI %s nrj+delta %s prev %s RETAINED: %s",
+                          self.device.name, delta_energy, v, v + delta_energy, prev_energy, state)
+        else:
+            state = 0
+            _LOGGER.debug("RESET ENERGY FOR: %s RETAINED: %s", self.device.name, 0)
 
         self._attr_available = True
         self._attr_native_value = state
-
+        self._last_val_sent = state
         self.async_write_ha_state()
 
 
