@@ -828,6 +828,8 @@ class NetatmoEnergySensor(NetatmoBaseSensor):
                           self.device.name, delta_energy, v, v + delta_energy, prev_energy, state)
         else:
             state = 0
+            # force only one 0 measure
+            self.device.in_reset = False
             _LOGGER.debug("RESET ENERGY FOR: %s RETAINED: %s", self.device.name, 0)
 
         self._attr_available = True
