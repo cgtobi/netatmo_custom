@@ -138,6 +138,7 @@
                 "data": {
                     "new_area": "Area name",
                     "selected_homes": "Homes (leave all unchecked will import all of your homes)",
+                    "enabled_homes": "Enabled homes",
                     "weather_areas": "Weather areas"
                 },
                 "description": "Define the homes you want to support, Configure public weather sensors.",
