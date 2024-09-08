@@ -72,6 +72,8 @@ class AsyncAccount:
             else:
                 self.homes[home_id] = Home(self.auth, raw_data=home)
 
+            LOG.debug("[TM] account.process_topology for home %s %s", home_id, self.homes[home_id].name)
+
     async def async_update_topology(
         self, disabled_homes_ids: list[str] | None = None
     ) -> None:
@@ -233,6 +235,8 @@ class AsyncAccount:
                             "modules": modules_data,
                         },
                     )
+
+                    LOG.debug("[TM] update_devices New home %s %s found.", home_id, self.homes[home_id].name)
                 await self.homes[home_id].update(
                     {HOME: {"modules": [normalize_weather_attributes(device_data)]}},
                 )

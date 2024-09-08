@@ -237,7 +237,7 @@ async def async_config_entry_updated(hass: HomeAssistant, entry: ConfigEntry) ->
             home_id for home_id in homes if home_id in account_home
         }
         if current_homes != enabled_homes:
-            _LOGGER.debug("Call reload to handle supported homes changes %s", homes)
+            _LOGGER.debug("[TM] Call reload to handle supported homes changes %s", homes)
             _reset_hass_domain(hass)
             await hass.config_entries.async_reload(entry.entry_id)
 
