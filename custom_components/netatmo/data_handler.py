@@ -293,30 +293,38 @@ class NetatmoDataHandler:
 
         if self._init_update_status_complete is False:
 
-            has_error = False
-            try:
-                num_calls = 0
-                for h in self.account.homes:
-                    _LOGGER.debug("try init account.async_update_status for home %s %s" , h, self.account.homes[h].name)
-                    # check the home is a real one
-                    if h in self.account.all_homes_id:
-                        _LOGGER.debug("do init account.async_update_status for home %s %s", h,
-                                      self.account.homes[h].name)
+
+            num_house_ok = 0
+            num_calls = 0
+            for h in self.account.homes:
+                _LOGGER.debug("try init account.async_update_status for home %s %s" , h, self.account.homes[h].name)
+                # check the home is a real one
+                if h in self.account.all_homes_id:
+                    _LOGGER.debug("do init account.async_update_status for home %s %s", h,
+                                  self.account.homes[h].name)
+                    has_error = False
+                    try:
                         await self.account.async_update_status(h)
                         num_calls += 1
-                self.add_api_call(num_calls)
+                    except pyatmo.ApiHomeReachabilityError as err:
+                        _LOGGER.debug("init account.async_update_status error Not Reachable Home: %s", err)
+                        has_error = True
+                    except (pyatmo.NoDevice, pyatmo.ApiError) as err:
+                        _LOGGER.debug("init account.async_update_status error NoDevice or ApiError %s", err)
+                        has_error = True
+                    except (TimeoutError, aiohttp.ClientConnectorError) as err:
+                        _LOGGER.debug("init account.async_update_status error Timeout or ClientConnectorError: %s", err)
+                        has_error = True
+                    except Exception as err:
+                        _LOGGER.debug("init account.async_update_status error unknown %s", err)
+                        has_error = True
 
-            except (pyatmo.NoDevice, pyatmo.ApiError) as err:
-                _LOGGER.debug("init account.async_update_status error NoDevice or ApiError %s", err)
-                has_error = True
-            except (TimeoutError, aiohttp.ClientConnectorError) as err:
-                _LOGGER.debug("init account.async_update_status error Timeout or ClientConnectorError: %s", err)
-                has_error = True
-            except Exception as err:
-                _LOGGER.debug("init account.async_update_status error unknown %s", err)
-                has_error = True
+                    if has_error is False:
+                        num_house_ok += 1
 
-            if has_error is False:
+            self.add_api_call(num_calls)
+
+            if num_house_ok > 0:
                 self._init_update_status_complete = True
 
         return self._init_update_status_complete
