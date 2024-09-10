@@ -297,10 +297,10 @@ class NetatmoDataHandler:
             try:
                 num_calls = 0
                 for h in self.account.homes:
-                    _LOGGER.debug("[TM] try init account.async_update_status for home %s %s" , h, self.account.homes[h].name)
+                    _LOGGER.debug("try init account.async_update_status for home %s %s" , h, self.account.homes[h].name)
                     # check the home is a real one
                     if h in self.account.all_homes_id:
-                        _LOGGER.debug("[TM] do init account.async_update_status for home %s %s", h,
+                        _LOGGER.debug("do init account.async_update_status for home %s %s", h,
                                       self.account.homes[h].name)
                         await self.account.async_update_status(h)
                         num_calls += 1
