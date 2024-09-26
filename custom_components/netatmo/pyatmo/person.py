@@ -6,10 +6,11 @@ from dataclasses import dataclass
 import logging
 from typing import TYPE_CHECKING
 
-from .const import RawData
 from .modules.base_class import NetatmoBase
 
 if TYPE_CHECKING:
+    from .const import RawData
+
     from .home import Home
 
 LOG = logging.getLogger(__name__)
