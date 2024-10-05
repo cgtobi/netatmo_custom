@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
-
-from aiohttp import ClientResponse
+from typing import TYPE_CHECKING, Any, cast
 
 from . import modules
 from .const import (
@@ -26,15 +24,24 @@ from .exceptions import (
     InvalidState,
     NoSchedule,
 )
-from .modules import Module
+from .modules.netatmo import NACamera
 from .person import Person
 from .room import Room
-from .schedule import Schedule
+from .schedule import Schedule, ScheduleType
 
 if TYPE_CHECKING:
+    from aiohttp import ClientResponse
+
     from .auth import AbstractAsyncAuth
+    from .modules import Module
 
 LOG = logging.getLogger(__name__)
+
+
+SCHEDULE_TYPE_MAPPING = {
+    "heating": ScheduleType.THERM,
+    "cooling": ScheduleType.COOLING,
+}
 
 
 class Home:
@@ -48,6 +55,11 @@ class Home:
     schedules: dict[str, Schedule]
     persons: dict[str, Person]
     events: dict[str, Event]
+
+    temperature_control_mode: str | None = None
+    therm_mode: str | None = None
+    therm_setpoint_default_duration: int | None = None
+    cooling_mode: str | None = None
 
     def __init__(self, auth: AbstractAsyncAuth, raw_data: RawData) -> None:
         """Initialize a Netatmo home instance."""
@@ -76,6 +88,13 @@ class Home:
         }
         self.events = {}
 
+        self.temperature_control_mode = raw_data.get("temperature_control_mode")
+        self.therm_mode = raw_data.get("therm_mode")
+        self.therm_setpoint_default_duration = raw_data.get(
+            "therm_setpoint_default_duration",
+        )
+        self.cooling_mode = raw_data.get("cooling_mode")
+
     def get_module(self, module: dict) -> Module:
         """Return module."""
 
@@ -86,7 +105,7 @@ class Home:
             )
         except AttributeError:
             LOG.info("Unknown device type %s", module["type"])
-            return getattr(modules, "NLunknown")(
+            return modules.NLunknown(
                 home=self,
                 module=module,
             )
@@ -97,6 +116,14 @@ class Home:
         self.name = raw_data.get("name", "Unknown")
 
         raw_modules = raw_data.get("modules", [])
+
+        self.temperature_control_mode = raw_data.get("temperature_control_mode")
+        self.therm_mode = raw_data.get("therm_mode")
+        self.therm_setpoint_default_duration = raw_data.get(
+            "therm_setpoint_default_duration",
+        )
+        self.cooling_mode = raw_data.get("cooling_mode")
+
         for module in raw_modules:
             if (module_id := module["id"]) not in self.modules:
                 self.modules[module_id] = self.get_module(module)
@@ -128,7 +155,9 @@ class Home:
         }
 
     async def update(
-        self, raw_data: RawData, do_raise_for_reachability_error=False
+        self,
+        raw_data: RawData,
+        do_raise_for_reachability_error: bool = False,
     ) -> None:
         """Update home with the latest data."""
         has_error = False
@@ -150,6 +179,7 @@ class Home:
             self.rooms[room["id"]].update(room)
 
         for person_status in data.get("persons", []):
+            # if there is a person update, it means the house has been updated
             has_an_update = True
             if person := self.persons.get(person_status["id"]):
                 person.update(person_status)
@@ -166,15 +196,12 @@ class Home:
             if module.reachable:
                 has_one_module_reachable = True
             if hasattr(module, "events"):
-                setattr(
-                    module,
-                    "events",
-                    [
-                        event
-                        for event in self.events.values()
-                        if getattr(event, "module_id") == module.entity_id
-                    ],
-                )
+                module = cast(NACamera, module)
+                module.events = [
+                    event
+                    for event in self.events.values()
+                    if event.module_id == module.entity_id
+                ]
 
         if (
             do_raise_for_reachability_error
@@ -182,17 +209,35 @@ class Home:
             and has_one_module_reachable is False
             and has_an_update is False
         ):
+            msg = "No Home update could be performed, all modules unreachable and not updated"
             raise ApiHomeReachabilityError(
-                "No Home update could be performed, all modules unreachable and not updated",
+                msg,
             )
 
     def get_selected_schedule(self) -> Schedule | None:
         """Return selected schedule for given home."""
 
         return next(
-            (schedule for schedule in self.schedules.values() if schedule.selected),
+            (
+                schedule
+                for schedule in self.schedules.values()
+                if schedule.selected
+                and self.temperature_control_mode
+                and schedule.type
+                == SCHEDULE_TYPE_MAPPING[self.temperature_control_mode]
+            ),
             None,
         )
+
+    def get_available_schedules(self) -> list[Schedule]:
+        """Return available schedules for given home."""
+
+        return [
+            schedule
+            for schedule in self.schedules.values()
+            if self.temperature_control_mode
+            and schedule.type == SCHEDULE_TYPE_MAPPING[self.temperature_control_mode]
+        ]
 
     def is_valid_schedule(self, schedule_id: str) -> bool:
         """Check if valid schedule."""
@@ -203,6 +248,11 @@ class Home:
         """Check if any room has an OTM device."""
 
         return any("OTM" in room.device_types for room in self.rooms.values())
+
+    def has_bns(self) -> bool:
+        """Check if any room has a BNS device."""
+
+        return any("BNS" in room.device_types for room in self.rooms.values())
 
     def get_hg_temp(self) -> float | None:
         """Return frost guard temperature value for given home."""
@@ -226,9 +276,11 @@ class Home:
     ) -> bool:
         """Set thermotat mode."""
         if schedule_id is not None and not self.is_valid_schedule(schedule_id):
-            raise NoSchedule(f"{schedule_id} is not a valid schedule id.")
+            msg = f"{schedule_id} is not a valid schedule id."
+            raise NoSchedule(msg)
         if mode is None:
-            raise NoSchedule(f"{mode} is not a valid mode.")
+            msg = f"{mode} is not a valid mode."
+            raise NoSchedule(msg)
         post_params = {"home_id": self.entity_id, "mode": mode}
         if end_time is not None and mode in {"hg", "away"}:
             post_params["endtime"] = str(end_time)
@@ -251,7 +303,8 @@ class Home:
     async def async_switch_schedule(self, schedule_id: str) -> bool:
         """Switch the schedule."""
         if not self.is_valid_schedule(schedule_id):
-            raise NoSchedule(f"{schedule_id} is not a valid schedule id")
+            msg = f"{schedule_id} is not a valid schedule id"
+            raise NoSchedule(msg)
         LOG.debug("Setting home (%s) schedule to %s", self.entity_id, schedule_id)
         resp = await self.auth.async_post_api_request(
             endpoint=SWITCHHOMESCHEDULE_ENDPOINT,
@@ -263,7 +316,8 @@ class Home:
     async def async_set_state(self, data: dict[str, Any]) -> bool:
         """Set state using given data."""
         if not is_valid_state(data):
-            raise InvalidState("Data for '/set_state' contains errors.")
+            msg = "Data for '/set_state' contains errors."
+            raise InvalidState(msg)
         LOG.debug("Setting state for home (%s) according to %s", self.entity_id, data)
         resp = await self.auth.async_post_api_request(
             endpoint=SETSTATE_ENDPOINT,
@@ -309,7 +363,8 @@ class Home:
         selected_schedule = self.get_selected_schedule()
 
         if selected_schedule is None:
-            raise NoSchedule("Could not determine selected schedule.")
+            msg = "Could not determine selected schedule."
+            raise NoSchedule(msg)
 
         zones = []
 
@@ -322,11 +377,11 @@ class Home:
         ]
 
         for zone in selected_schedule.zones:
+            rooms = []
             new_zone = {
                 "id": zone.entity_id,
                 "name": zone.name,
                 "type": zone.type,
-                "rooms": [],
             }
 
             for room in zone.rooms:
@@ -334,10 +389,11 @@ class Home:
                 if zone.entity_id == zone_id and room.entity_id in temps:
                     temp = temps[room.entity_id]
 
-                new_zone["rooms"].append(
+                rooms.append(
                     {"id": room.entity_id, "therm_setpoint_temperature": temp},
                 )
 
+            new_zone["rooms"] = rooms
             zones.append(new_zone)
 
         schedule = {
@@ -356,7 +412,8 @@ class Home:
     ) -> None:
         """Modify an existing schedule."""
         if not is_valid_schedule(schedule):
-            raise InvalidSchedule("Data for '/synchomeschedule' contains errors.")
+            msg = "Data for '/synchomeschedule' contains errors."
+            raise InvalidSchedule(msg)
         LOG.debug(
             "Setting schedule (%s) for home (%s) to %s",
             schedule_id,

@@ -4,11 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from .const import FROSTGUARD, HOME, MANUAL, SETROOMTHERMPOINT_ENDPOINT, RawData
+from .const import (
+    COOLING,
+    FROSTGUARD,
+    HEATING,
+    HOME,
+    IDLE,
+    MANUAL,
+    OFF,
+    SETROOMTHERMPOINT_ENDPOINT,
+    UNKNOWN,
+    RawData,
+)
 from .modules.base_class import NetatmoBase
 from .modules.device_types import DeviceType
+from .modules.module import Boiler
 
 if TYPE_CHECKING:
     from .home import Home
@@ -29,14 +41,24 @@ class Room(NetatmoBase):
 
     climate_type: DeviceType | None = None
 
-    heating_power_request: int | None = None
     humidity: int | None = None
+    therm_measured_temperature: float | None = None
+
     reachable: bool | None = None
+
+    heating_power_request: int | None = None
     therm_setpoint_temperature: float | None = None
     therm_setpoint_mode: str | None = None
-    therm_measured_temperature: float | None = None
     therm_setpoint_start_time: int | None = None
     therm_setpoint_end_time: int | None = None
+
+    anticipating: bool | None = None
+    open_window: bool | None = None
+
+    cooling_setpoint_temperature: float | None = None
+    cooling_setpoint_start_time: int | None = None
+    cooling_setpoint_end_time: int | None = None
+    cooling_setpoint_mode: str | None = None
 
     def __init__(
         self,
@@ -60,7 +82,7 @@ class Room(NetatmoBase):
     def update_topology(self, raw_data: RawData) -> None:
         """Update room topology."""
 
-        self.name = raw_data["name"]
+        self.name = raw_data.get("name", UNKNOWN)
         self.modules = {
             m_id: m
             for m_id, m in self.home.modules.items()
@@ -91,18 +113,30 @@ class Room(NetatmoBase):
     def update(self, raw_data: RawData) -> None:
         """Update room data."""
 
-        self.heating_power_request = raw_data.get("heating_power_request")
         self.humidity = raw_data.get("humidity")
         if self.climate_type == DeviceType.BNTH:
             # BNTH is wired, so the room is always reachable
             self.reachable = True
         else:
             self.reachable = raw_data.get("reachable")
+
         self.therm_measured_temperature = raw_data.get("therm_measured_temperature")
+
+        self.reachable = raw_data.get("reachable")
+
+        self.heating_power_request = raw_data.get("heating_power_request")
         self.therm_setpoint_mode = raw_data.get("therm_setpoint_mode")
         self.therm_setpoint_temperature = raw_data.get("therm_setpoint_temperature")
         self.therm_setpoint_start_time = raw_data.get("therm_setpoint_start_time")
         self.therm_setpoint_end_time = raw_data.get("therm_setpoint_end_time")
+
+        self.anticipating = raw_data.get("anticipating")
+        self.open_window = raw_data.get("open_window")
+
+        self.cooling_setpoint_temperature = raw_data.get("cooling_setpoint_temperature")
+        self.cooling_setpoint_start_time = raw_data.get("cooling_setpoint_start_time")
+        self.cooling_setpoint_end_time = raw_data.get("cooling_setpoint_end_time")
+        self.cooling_setpoint_mode = raw_data.get("cooling_setpoint_mode")
 
     async def async_therm_manual(
         self,
@@ -134,7 +168,9 @@ class Room(NetatmoBase):
         mode = MODE_MAP.get(mode, mode)
 
         if "NATherm1" in self.device_types or (
-            "NRV" in self.device_types and not self.home.has_otm()
+            "NRV" in self.device_types
+            and not self.home.has_otm()
+            and not self.home.has_bns()
         ):
             await self._async_set_thermpoint(mode, temp, end_time)
 
@@ -197,3 +233,47 @@ class Room(NetatmoBase):
             endpoint=SETROOMTHERMPOINT_ENDPOINT,
             params=post_params,
         )
+
+    @property
+    def boiler_status(self) -> bool | None:
+        """Return the boiler status."""
+
+        for module in self.modules.values():
+            if hasattr(module, "boiler_status"):
+                module = cast(Boiler, module)
+                if (boiler_status := module.boiler_status) is not None:
+                    return boiler_status
+
+        return None
+
+    @property
+    def setpoint_mode(self) -> str:
+        """Return the current setpoint mode."""
+
+        return self.therm_setpoint_mode or self.cooling_setpoint_mode or UNKNOWN
+
+    @property
+    def setpoint_temperature(self) -> float | None:
+        """Return the current setpoint temperature."""
+
+        return (
+            self.therm_setpoint_temperature or self.cooling_setpoint_temperature or None
+        )
+
+    @property
+    def hvac_action(self) -> str:
+        """Return the current HVAC action."""
+
+        if self.setpoint_mode == OFF:
+            return OFF
+
+        if self.boiler_status is True:
+            return HEATING
+
+        if self.heating_power_request is not None and self.heating_power_request > 0:
+            return HEATING
+
+        if self.cooling_setpoint_temperature:
+            return COOLING
+
+        return IDLE

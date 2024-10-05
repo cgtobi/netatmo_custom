@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from . import modules
@@ -20,7 +20,7 @@ from .const import (
 )
 from .helpers import extract_raw_data
 from .home import Home
-from .modules.module import MeasureInterval, Module
+from .modules.module import Energy, MeasureInterval, Module
 
 if TYPE_CHECKING:
     from .auth import AbstractAsyncAuth
@@ -31,7 +31,11 @@ LOG = logging.getLogger(__name__)
 class AsyncAccount:
     """Async class of a Netatmo account."""
 
-    def __init__(self, auth: AbstractAsyncAuth, favorite_stations: bool = True) -> None:
+    def __init__(
+        self,
+        auth: AbstractAsyncAuth,
+        favorite_stations: bool = True,
+    ) -> None:
         """Initialize the Netatmo account."""
 
         self.auth: AbstractAsyncAuth = auth
@@ -57,7 +61,6 @@ class AsyncAccount:
             disabled_homes_ids = []
 
         for home in self.raw_data["homes"]:
-
             home_id = home.get("id", "Unknown")
             home_name = home.get("name", "Unknown")
             self.all_homes_id[home_id] = home_name
@@ -72,10 +75,9 @@ class AsyncAccount:
             else:
                 self.homes[home_id] = Home(self.auth, raw_data=home)
 
-            LOG.debug("account.process_topology for home %s %s", home_id, self.homes[home_id].name)
-
     async def async_update_topology(
-        self, disabled_homes_ids: list[str] | None = None
+        self,
+        disabled_homes_ids: list[str] | None = None,
     ) -> None:
         """Retrieve topology data from /homesdata."""
 
@@ -129,12 +131,15 @@ class AsyncAccount:
     ) -> None:
         """Retrieve measures data from /getmeasure."""
 
-        await getattr(self.homes[home_id].modules[module_id], "async_update_measures")(
-            start_time=start_time,
-            end_time=end_time,
-            interval=interval,
-            days=days,
-        )
+        module = self.homes[home_id].modules[module_id]
+        if module.has_feature("historical_data"):
+            module = cast(Energy, module)
+            await module.async_update_measures(
+                start_time=start_time,
+                end_time=end_time,
+                interval=interval,
+                days=days,
+            )
 
     def register_public_weather_area(
         self,
@@ -235,13 +240,11 @@ class AsyncAccount:
                             "modules": modules_data,
                         },
                     )
-
-                    LOG.debug("update_devices New home %s %s found.", home_id, self.homes[home_id].name)
                 await self.homes[home_id].update(
                     {HOME: {"modules": [normalize_weather_attributes(device_data)]}},
                 )
             else:
-                LOG.debug("No home %s found.", home_id)
+                LOG.debug("No home %s (%s) found.", home_id, home_id)
 
             for module_data in device_data.get("modules", []):
                 module_data["home_id"] = home_id
