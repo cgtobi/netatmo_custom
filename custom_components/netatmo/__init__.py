@@ -153,7 +153,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             try:
                 webhook_url = await async_cloudhook_generate_url(hass, entry)
             except:
-                _LOGGER.warning("Error during webhook registration for cloud subscription")
+                _LOGGER.warning("Error during webhook registration for cloud subscription, hook may be already created")
                 return
         else:
             webhook_url = webhook_generate_url(hass, entry.data[CONF_WEBHOOK_ID])
