@@ -269,6 +269,8 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
 
         self._selected_schedule = None
         self._attr_hvac_modes = [HVACMode.AUTO, HVACMode.HEAT]
+        self._attr_preset_mode = PRESET_SCHEDULE
+
 
         if self.device_type == DeviceType.NLC:
             self._attr_supported_features =  SUPPORT_FLAGS_PILOT_WIRE
@@ -279,7 +281,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
             self._preset_map_netatmo = PRESET_MAP_NETATMO_PILOT_WIRE
             self._attr_hvac_modes = []
             self._attr_hvac_mode = HVACMode.AUTO
-            self._attr_preset_mode = PRESET_SCHEDULE
+
         else:
 
             if self.device_type is NA_THERM:
