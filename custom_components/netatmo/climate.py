@@ -453,7 +453,6 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
                 if preset_mode == PRESET_FROST_GUARD and end_timestamp is None:
                     therm_mode = STATE_NETATMO_HG
 
-
                 pilot_wire = self._preset_map_netatmo[preset_mode]
 
             self._attr_preset_mode = preset_mode
