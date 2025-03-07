@@ -460,8 +460,8 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
 
             if therm_mode == STATE_NETATMO_MANUAL:
                 if end_timestamp is None:
-                    # weird netatmo case sometimes here if we don't force a duration in manual case, force for the next 7 days
-                    end_datetime_manual = dt.datetime.now() + dt.timedelta(seconds=7 * 24 * 3600)
+                    # weird netatmo case sometimes here if we don't force a duration in manual case, force for the next year
+                    end_datetime_manual = dt.datetime.now() + dt.timedelta(seconds=365 * 24 * 3600)
                     end_timestamp = int(dt_util.as_timestamp(end_datetime_manual))
 
             self._attr_preset_mode = preset_mode
