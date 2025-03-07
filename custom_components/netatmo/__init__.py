@@ -153,8 +153,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if cloud.async_active_subscription(hass):
             try:
                 webhook_url = await async_cloudhook_generate_url(hass, entry)
-            except:
-                _LOGGER.warning("Error during webhook registration for cloud subscription, hook may be already created")
+            except Exception as e:
+                _LOGGER.warning("Error during webhook registration for cloud subscription - %s", e)
                 return
         else:
             webhook_url = webhook_generate_url(hass, entry.data[CONF_WEBHOOK_ID])
@@ -214,12 +214,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry) -> str:
     """Generate the full URL for a webhook_id."""
     if CONF_CLOUDHOOK_URL not in entry.data:
-        webhook_url = await cloud.async_create_cloudhook(
-            hass, entry.data[CONF_WEBHOOK_ID]
-        )
+
+        do_delete_retry = False
+        webhook_url = None
+        try:
+            webhook_url = await cloud.async_create_cloudhook(
+                hass, entry.data[CONF_WEBHOOK_ID]
+            )
+        except ValueError as e:
+            if "Hook is already enabled" in str(e):
+                _LOGGER.info("Retry: cloudhook was already enabled, try to delete and recreate - %s", e)
+                do_delete_retry = True
+            else:
+                _LOGGER.warning("Error during cloudhook registration, ValueError - %s", e)
+                raise e
+        except Exception as e:
+            _LOGGER.warning("Error during cloudhook registration - %s", e)
+            raise e
+
+
+        if do_delete_retry:
+            try:
+                await cloud.async_delete_cloudhook(
+                    hass, entry.data[CONF_WEBHOOK_ID]
+                )
+                webhook_url = await cloud.async_create_cloudhook(
+                    hass, entry.data[CONF_WEBHOOK_ID]
+                )
+            except Exception as e:
+                _LOGGER.warning("Error during cloudhook registration retry - %s", e)
+                raise e
+
+        if webhook_url is None:
+            raise ValueError("Error during cloudhook registration, no webhook url")
+
         data = {**entry.data, CONF_CLOUDHOOK_URL: webhook_url}
         hass.config_entries.async_update_entry(entry, data=data)
         return webhook_url
+
     return str(entry.data[CONF_CLOUDHOOK_URL])
 
 
