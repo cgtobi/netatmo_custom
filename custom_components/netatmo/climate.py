@@ -508,6 +508,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
             _LOGGER.error("Preset mode '%s' not available", preset_mode)
 
         self.async_write_ha_state()
+        self.data_handler.async_force_update(self._signal_name)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature for 2 hours."""
