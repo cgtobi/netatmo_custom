@@ -287,7 +287,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
             self._netatmo_map_preset = NETATMO_MAP_PRESET_PILOT_WIRE
             self._hvac_map_netatmo = HVAC_MAP_NETATMO_PILOT_WIRE
             self._preset_map_netatmo = PRESET_MAP_NETATMO_PILOT_WIRE
-            self._attr_hvac_modes = []
+            self._attr_hvac_modes.append(HVACMode.OFF)
             self._attr_hvac_mode = HVACMode.AUTO
 
         else:
@@ -438,7 +438,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
     async def async_set_preset_mode_with_end_datetime(self, preset_mode: str, end_datetime : dt.datetime | str| None = None) -> None:
         """Set new preset mode."""
 
-        end_datetime = dt.datetime.now() + dt.timedelta(seconds=5 * 3600)
+
         end_timestamp = None
         if end_datetime is not None:
             end_timestamp = int(dt_util.as_timestamp(end_datetime))
@@ -448,18 +448,26 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
             if preset_mode == PRESET_SCHEDULE:
                 therm_mode = STATE_NETATMO_HOME
                 pilot_wire = getattr(self.device, "therm_setpoint_fp", self._netatmo_map_preset.get(PRESET_FROST_GUARD))
+                self._attr_hvac_mode = HVACMode.AUTO
             else:
                 therm_mode = STATE_NETATMO_MANUAL
+                self._attr_hvac_mode = HVACMode.HEAT
                 if preset_mode == PRESET_FROST_GUARD and end_timestamp is None:
                     therm_mode = STATE_NETATMO_HG
+                    self._attr_hvac_mode = HVACMode.OFF
 
                 pilot_wire = self._preset_map_netatmo[preset_mode]
+
+            if therm_mode == STATE_NETATMO_MANUAL:
+                if end_timestamp is None:
+                    # weird netatmo case sometimes here if we don't force a duration in manual case, force for the next 7 days
+                    end_datetime_manual = dt.datetime.now() + dt.timedelta(seconds=7 * 24 * 3600)
+                    end_timestamp = int(dt_util.as_timestamp(end_datetime_manual))
 
             self._attr_preset_mode = preset_mode
 
             await self.device.async_therm_set(mode=therm_mode, end_time=end_timestamp, pilot_wire=pilot_wire)
 
-            self._attr_hvac_mode = self._hvac_map_netatmo.get(self._attr_preset_mode)
         elif preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX):
             if (
                 self.device_type == NA_VALVE
@@ -540,10 +548,13 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
             self._attr_preset_mode = self._netatmo_map_preset[
                 getattr(self.device, "therm_setpoint_fp", self._netatmo_map_preset.get(PRESET_FROST_GUARD))
             ]
-            if getattr(self.device, "therm_setpoint_mode", STATE_NETATMO_HOME) == STATE_NETATMO_HOME:
+            setpoint_mode = getattr(self.device, "therm_setpoint_mode", STATE_NETATMO_HOME)
+            if setpoint_mode == STATE_NETATMO_HOME:
                 self._attr_hvac_mode = HVACMode.AUTO
+            elif setpoint_mode == STATE_NETATMO_HG:
+                self._attr_hvac_mode = HVACMode.OFF
             else:
-                self._attr_hvac_mode = self._hvac_map_netatmo[self._attr_preset_mode]
+                self._attr_hvac_mode = HVACMode.HEAT
         else:
             self._attr_preset_mode = self._netatmo_map_preset[
                 getattr(self.device, "therm_setpoint_mode", self._netatmo_map_preset.get(PRESET_SCHEDULE))
