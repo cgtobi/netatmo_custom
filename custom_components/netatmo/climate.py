@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, cast
 import datetime as dt
@@ -468,7 +469,19 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
 
             self._attr_preset_mode = preset_mode
 
-            await self.device.async_therm_set(mode=therm_mode, end_time=end_timestamp, pilot_wire=pilot_wire)
+            do_retry = False
+            try:
+                await self.device.async_therm_set(mode=therm_mode, end_time=end_timestamp, pilot_wire=pilot_wire)
+            except asyncio.TimeoutError as e:
+                do_retry = True
+                _LOGGER.warning(f"Timeout setting preset mode: {therm_mode} {end_timestamp} {pilot_wire} {e}")
+            except Exception as e:
+                _LOGGER.warning("Error setting preset mode: %s", e)
+                raise e
+
+            if do_retry:
+                await self.device.async_therm_set(mode=therm_mode, end_time=end_timestamp, pilot_wire=pilot_wire)
+
 
         elif preset_mode in (PRESET_BOOST, STATE_NETATMO_MAX):
             if (
