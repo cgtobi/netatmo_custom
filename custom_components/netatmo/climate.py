@@ -507,9 +507,6 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-        if self.device_type == DeviceType.NLC:
-            _LOGGER.debug(f"netatmo climate before {self.device.name} {self.device.therm_setpoint_mode} {self.device.therm_setpoint_fp}  {self._attr_preset_mode} {self._attr_hvac_mode}")
-
 
         if not self.device.reachable:
             if self.available:
@@ -531,9 +528,6 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
                 self._attr_hvac_mode = HVACMode.AUTO
             else:
                 self._attr_hvac_mode = self._hvac_map_netatmo[self._attr_preset_mode]
-
-            _LOGGER.debug(f"netatmo climate after  {self.device.name} {self.device.therm_setpoint_mode} {self.device.therm_setpoint_fp} {self._attr_preset_mode} {self._attr_hvac_mode} ")
-
         else:
             self._attr_preset_mode = self._netatmo_map_preset[
                 getattr(self.device, "therm_setpoint_mode", self._netatmo_map_preset.get(PRESET_SCHEDULE))

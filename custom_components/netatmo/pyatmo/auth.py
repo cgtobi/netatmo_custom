@@ -93,7 +93,6 @@ class AbstractAsyncAuth(ABC):
         timeout: int = 5,
     ) -> ClientResponse:
         """Wrap async post requests."""
-        LOG.debug(f"Netatmo POST request: {endpoint}")
         return await self.async_post_request(
             url=(base_url or self.base_url) + endpoint,
             params=params,
