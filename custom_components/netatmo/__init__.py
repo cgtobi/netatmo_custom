@@ -149,7 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data = {**entry.data, CONF_WEBHOOK_ID: secrets.token_hex()}
             hass.config_entries.async_update_entry(entry, data=data)
 
-        _LOGGER.debug(f"NETATMO WEB_HOOK_REGISTRATION {entry.data[CONF_WEBHOOK_ID]}")
+        _LOGGER.debug(f"Netatmo webhook registration {entry.data.get(CONF_WEBHOOK_ID)}")
         if cloud.async_active_subscription(hass):
             try:
                 webhook_url = await async_cloudhook_generate_url(hass, entry)
