@@ -28,8 +28,8 @@ from .const import (
     RawData,
 )
 from .modules.base_class import NetatmoBase
-from .modules.device_types import DeviceCategory, DeviceType
-from .modules.module import ApplianceTypeMixin, Boiler
+from .modules.device_types import ApplianceType, DeviceCategory, DeviceType
+from .modules.module import ApplianceTypeMixin, Boiler, PowerMixin
 
 if TYPE_CHECKING:
     from .home import Home
@@ -41,18 +41,18 @@ MODE_MAP = {SCHEDULE: HOME}
 
 # as for now all the below is not exposed at all through the API, don't put it in the public API, so not in const.py
 NETAMO_CLIMATE_SETPOINT_MODE_TO_PILOT_WIRE = {
-    MANUAL: PILOT_WIRE_AWAY,
+    MANUAL: PILOT_WIRE_COMFORT,
     MAX: PILOT_WIRE_COMFORT,
     OFF: PILOT_WIRE_FROST_GUARD,
-    HOME: PILOT_WIRE_COMFORT,
+    HOME: PILOT_WIRE_COMFORT,  # HOME is equivalent to a schedule for Netatmo NLC based room
     FROSTGUARD: PILOT_WIRE_FROST_GUARD,
     SCHEDULE: PILOT_WIRE_COMFORT,
     AWAY: PILOT_WIRE_AWAY,
 }
 # invert of the map above:
 NETAMO_PILOT_WIRE_TO_CLIMATE_SETPOINT_MODE = {
-    PILOT_WIRE_COMFORT: HOME,
-    PILOT_WIRE_AWAY: AWAY,
+    PILOT_WIRE_COMFORT: MANUAL,
+    PILOT_WIRE_AWAY: MANUAL,  # AWAY is like ECO for a pilot wire heater, so put manual to force it to happen
     PILOT_WIRE_FROST_GUARD: FROSTGUARD,
     PILOT_WIRE_STAND_BY: FROSTGUARD,
     PILOT_WIRE_COMFORT_1: HOME,
@@ -99,7 +99,7 @@ class Room(NetatmoBase):
     # "away"
     # "frost_guard"
     # "stand_by"
-    # "comfort_1" => documentation unclear and contradictory here, as it is in teh json schema but no in the doc
+    # "comfort_1" => documentation unclear and contradictory here, as it is in the json schema but no in the doc
     # "comfort_2" => same
     # but here:
     therm_setpoint_fp: str | None = None
@@ -115,6 +115,8 @@ class Room(NetatmoBase):
     cooling_setpoint_start_time: int | None = None
     cooling_setpoint_end_time: int | None = None
     cooling_setpoint_mode: str | None = None
+
+    radiators_power: int | None = None
 
     def __init__(
         self,
@@ -158,10 +160,11 @@ class Room(NetatmoBase):
             if (
                 module.device_type == "NLC"
                 and isinstance(module, ApplianceTypeMixin)
-                and module.appliance_type == "radiator"
+                and module.appliance_type == ApplianceType.radiator
             ):
                 self.support_pilot_wire = True
-                # in this case the cable outlet can be seen as climate control
+                # in this case the cable outlet can be seen as climate control, be sure to add
+                # even if the ApplianceTypeMixin should have set the device_category as climate already
                 self.features.add(DeviceCategory.climate.name)
 
         if "OTM" in self.device_types:
@@ -184,9 +187,31 @@ class Room(NetatmoBase):
         """Update room data."""
 
         self.humidity = raw_data.get("humidity")
-        if self.climate_type in [DeviceType.BNTH, DeviceType.NLC]:
+        self.radiators_power = 0
+
+        if self.climate_type == DeviceType.BNTH:
             # BNTH is wired, so the room is always reachable
             self.reachable = True
+        elif self.climate_type == DeviceType.NLC:
+            self.reachable = raw_data.get("reachable", False)
+            for module in self.modules.values():
+                if (
+                    isinstance(module, ApplianceTypeMixin)
+                    and module.device_type == DeviceType.NLC  # type: ignore # mypy issue 4335
+                    and module.appliance_type == ApplianceType.radiator
+                ):
+                    if isinstance(module, PowerMixin) and module.power is not None:
+                        self.radiators_power += module.power
+
+                    if hasattr(module, "reachable"):
+                        state = module.reachable
+                        if state is not None:
+                            if self.reachable is None:
+                                self.reachable = state
+                            else:
+                                self.reachable = (
+                                    self.reachable or state
+                                )  # as soon as we do have one
         else:
             self.reachable = raw_data.get("reachable")
 
@@ -354,6 +379,12 @@ class Room(NetatmoBase):
         return (
             self.therm_setpoint_temperature or self.cooling_setpoint_temperature or None
         )
+
+    @property
+    def setpoint_fp(self) -> str | None:
+        """Return the current setpoint 'Fil pilote (FP)'."""
+
+        return self.therm_setpoint_fp or None
 
     @property
     def hvac_action(self) -> str:

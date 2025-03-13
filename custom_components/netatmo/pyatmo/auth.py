@@ -93,6 +93,7 @@ class AbstractAsyncAuth(ABC):
         timeout: int = 5,
     ) -> ClientResponse:
         """Wrap async post requests."""
+
         return await self.async_post_request(
             url=(base_url or self.base_url) + endpoint,
             params=params,
