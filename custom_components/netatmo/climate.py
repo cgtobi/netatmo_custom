@@ -408,17 +408,15 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
     @property
     def hvac_action(self) -> HVACAction:
         """Return the current running hvac operation if supported."""
-        if self.device_type == DeviceType.NLC:
-            hvac_mode = self._hvac_map_netatmo.get(self._attr_preset_mode, HVACMode.OFF)
-            if hvac_mode == HVACMode.HEAT:
-                return HVACAction.HEATING
-            return HVACAction.IDLE
-
         if self.device_type != NA_VALVE and self._boilerstatus is not None:
             return CURRENT_HVAC_MAP_NETATMO[self._boilerstatus]
         # Maybe it is a valve
+        if self.device_type ==DeviceType.NLC:
+            attribute = "radiators_power"
+        else:
+            attribute = "heating_power_request"
         if (
-            heating_req := getattr(self.device, "heating_power_request", 0)
+            heating_req := getattr(self.device, attribute, 0)
         ) is not None and heating_req > 0:
             return HVACAction.HEATING
         return HVACAction.IDLE
