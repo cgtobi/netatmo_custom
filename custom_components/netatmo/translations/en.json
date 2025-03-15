@@ -47,6 +47,11 @@
         }
     },
     "entity": {
+        "button": {
+            "preferred_position": {
+                "name": "Preferred position"
+            }
+        },
         "climate": {
             "thermostat": {
                 "state_attributes": {

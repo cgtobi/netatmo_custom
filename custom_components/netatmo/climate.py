@@ -41,7 +41,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -178,7 +178,9 @@ SERVICE_ALLOWED_PRESETS = tuple(service_allowed_preset)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Netatmo energy platform."""
 
@@ -277,6 +279,7 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
         )
 
         self._selected_schedule = None
+
         self._attr_hvac_modes = [HVACMode.AUTO, HVACMode.HEAT]
         self._attr_preset_mode = PRESET_SCHEDULE
 
@@ -544,7 +547,6 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
     @callback
     def async_update_callback(self) -> None:
         """Update the entity's state."""
-
         if not self.device.reachable:
             if self.available:
                 self._connected = False

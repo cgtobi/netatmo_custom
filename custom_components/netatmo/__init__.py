@@ -251,7 +251,6 @@ async def async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry) 
         data = {**entry.data, CONF_CLOUDHOOK_URL: webhook_url}
         hass.config_entries.async_update_entry(entry, data=data)
         return webhook_url
-
     return str(entry.data[CONF_CLOUDHOOK_URL])
 
 
