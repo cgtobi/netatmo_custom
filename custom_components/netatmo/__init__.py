@@ -149,8 +149,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data = {**entry.data, CONF_WEBHOOK_ID: secrets.token_hex()}
             hass.config_entries.async_update_entry(entry, data=data)
 
+        _LOGGER.debug(f"Netatmo webhook registration {entry.data.get(CONF_WEBHOOK_ID)}")
         if cloud.async_active_subscription(hass):
-            webhook_url = await async_cloudhook_generate_url(hass, entry)
+            try:
+                webhook_url = await async_cloudhook_generate_url(hass, entry)
+            except Exception as e:
+                _LOGGER.warning("Error during webhook registration for cloud subscription - %s", e)
+                return
         else:
             webhook_url = webhook_generate_url(hass, entry.data[CONF_WEBHOOK_ID])
 
@@ -173,7 +178,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         try:
             await hass.data[DOMAIN][entry.entry_id][AUTH].async_addwebhook(webhook_url)
-            _LOGGER.info("Register Netatmo webhook: %s", webhook_url)
+            _LOGGER.debug("Register Netatmo webhook: %s", webhook_url)
         except pyatmo.ApiError as err:
             _LOGGER.error("Error during webhook registration - %s", err)
         else:
@@ -209,9 +214,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry) -> str:
     """Generate the full URL for a webhook_id."""
     if CONF_CLOUDHOOK_URL not in entry.data:
-        webhook_url = await cloud.async_create_cloudhook(
-            hass, entry.data[CONF_WEBHOOK_ID]
-        )
+
+        do_delete_retry = False
+        webhook_url = None
+        try:
+            webhook_url = await cloud.async_create_cloudhook(
+                hass, entry.data[CONF_WEBHOOK_ID]
+            )
+        except ValueError as e:
+            if "Hook is already enabled" in str(e):
+                _LOGGER.info("Retry: cloudhook was already enabled, try to delete and recreate - %s", e)
+                do_delete_retry = True
+            else:
+                _LOGGER.warning("Error during cloudhook registration, ValueError - %s", e)
+                raise e
+        except Exception as e:
+            _LOGGER.warning("Error during cloudhook registration - %s", e)
+            raise e
+
+
+        if do_delete_retry:
+            try:
+                await cloud.async_delete_cloudhook(
+                    hass, entry.data[CONF_WEBHOOK_ID]
+                )
+                webhook_url = await cloud.async_create_cloudhook(
+                    hass, entry.data[CONF_WEBHOOK_ID]
+                )
+            except Exception as e:
+                _LOGGER.warning("Error during cloudhook registration retry - %s", e)
+                raise e
+
+        if webhook_url is None:
+            raise ValueError("Error during cloudhook registration, no webhook url")
+
         data = {**entry.data, CONF_CLOUDHOOK_URL: webhook_url}
         hass.config_entries.async_update_entry(entry, data=data)
         return webhook_url
@@ -251,7 +287,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await data[entry.entry_id][AUTH].async_dropwebhook()
         except pyatmo.ApiError:
             _LOGGER.debug("No webhook to be dropped")
-        _LOGGER.info("Unregister Netatmo webhook")
+        _LOGGER.debug("Unregister Netatmo webhook")
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
@@ -284,7 +320,6 @@ async def async_remove_config_entry_device(
     return not any(
         identifier
         for identifier in device_entry.identifiers
-        if identifier[0] == DOMAIN
-        and identifier[1] in modules
+        if (identifier[0] == DOMAIN and identifier[1] in modules)
         or identifier[1] in rooms
     )

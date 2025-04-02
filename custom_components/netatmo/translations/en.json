@@ -47,6 +47,24 @@
         }
     },
     "entity": {
+        "button": {
+            "preferred_position": {
+                "name": "Preferred position"
+            }
+        },
+        "climate": {
+            "thermostat": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "frost_guard": "Frost guard",
+                            "manual": "Manual",
+                            "schedule": "Schedule"
+                        }
+                    }
+                }
+            }
+        },
         "sensor": {
             "gust_angle": {
                 "name": "Gust angle"

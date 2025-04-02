@@ -41,6 +41,7 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     NETATMO_CREATE_BATTERY,
+    NETATMO_CREATE_BUTTON,
     NETATMO_CREATE_CAMERA,
     NETATMO_CREATE_CAMERA_LIGHT,
     NETATMO_CREATE_CLIMATE,
@@ -117,7 +118,7 @@ NETATMO_USER_CALL_LIMITS = {
     CALL_PER_HOUR: 20,        # 20 to comply with the global limit of (20 * number of users) requests every hour
     CALL_PER_TEN_SECONDS: 2,  # 2  to comply with the global limit of (2 * number of users) requests every 10 seconds
     ACCOUNT: 10800,
-    HOME: 200, # 200s between calls it means 18 calls per hours
+    HOME: 300, # could be 200s between calls it means 18 calls per hours
     WEATHER: 600,
     AIR_CARE: 300,
     PUBLIC: 600,
@@ -563,11 +564,11 @@ class NetatmoDataHandler:
     async def handle_event(self, event: dict) -> None:
         """Handle webhook events."""
         if event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_ACTIVATION:
-            _LOGGER.info("%s webhook successfully registered", MANUFACTURER)
+            _LOGGER.debug("%s webhook successfully registered", MANUFACTURER)
             self._webhook = True
 
         elif event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_DEACTIVATION:
-            _LOGGER.info("%s webhook unregistered", MANUFACTURER)
+            _LOGGER.debug("%s webhook unregistered", MANUFACTURER)
             self._webhook = False
 
         elif event["data"][WEBHOOK_PUSH_TYPE] == WEBHOOK_NACAMERA_CONNECTION:
@@ -759,16 +760,32 @@ class NetatmoDataHandler:
                 NETATMO_CREATE_CAMERA,
                 NETATMO_CREATE_CAMERA_LIGHT,
             ],
-            NetatmoDeviceCategory.dimmer: [NETATMO_CREATE_LIGHT, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
-            NetatmoDeviceCategory.shutter: [NETATMO_CREATE_COVER, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.dimmer: [
+                NETATMO_CREATE_LIGHT,
+                NETATMO_CREATE_SENSOR,
+                NETATMO_CREATE_ENERGY
+            ],
+            NetatmoDeviceCategory.shutter: [
+                NETATMO_CREATE_COVER,
+                NETATMO_CREATE_BUTTON,
+                NETATMO_CREATE_SENSOR,
+                NETATMO_CREATE_ENERGY
+            ],
             NetatmoDeviceCategory.switch: [
                 NETATMO_CREATE_LIGHT,
                 NETATMO_CREATE_SWITCH,
                 NETATMO_CREATE_SENSOR,
                 NETATMO_CREATE_ENERGY,
             ],
-            NetatmoDeviceCategory.meter: [NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
-            NetatmoDeviceCategory.fan: [NETATMO_CREATE_FAN, NETATMO_CREATE_SENSOR, NETATMO_CREATE_ENERGY],
+            NetatmoDeviceCategory.meter: [
+                NETATMO_CREATE_SENSOR,
+                NETATMO_CREATE_ENERGY
+            ],
+            NetatmoDeviceCategory.fan: [
+                NETATMO_CREATE_FAN,
+                NETATMO_CREATE_SENSOR,
+                NETATMO_CREATE_ENERGY
+            ],
         }
         for module in home.modules.values():
             if not module.device_category:
@@ -777,7 +794,7 @@ class NetatmoDataHandler:
             signals = netatmo_type_signal_map.get(module.device_category, [])
 
 
-            # unfortunately the ecoounter is handled in a very peculiar way
+            # unfortunately the ecocounter is handled in a very peculiar way
             # it is its own bridge, and sensor are hardcoded by name
             if (module.device_category == NetatmoDeviceCategory.meter and
                     module.device_type == NetatmoDeviceType.NLE):
