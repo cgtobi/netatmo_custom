@@ -7,9 +7,11 @@ import bisect
 from dataclasses import dataclass
 import logging
 from operator import itemgetter
+from time import time
 from typing import TYPE_CHECKING, Any
 
 from ..const import MAX_HISTORY_TIME_FRAME, RawData
+from ..event import EventTypes
 from ..modules.device_types import ApplianceType, DeviceType
 
 if TYPE_CHECKING:
@@ -17,9 +19,6 @@ if TYPE_CHECKING:
 
     from ..home import Home
 
-from time import time
-
-from ..event import EventTypes
 
 LOG = logging.getLogger(__name__)
 

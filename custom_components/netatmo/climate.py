@@ -327,8 +327,6 @@ class NetatmoThermostat(NetatmoRoomEntity, ClimateEntity):
         if self.home.entity_id != data["home_id"]:
             return
 
-        _LOGGER.debug(f"Webhook event for thermostat {self.device.entity_id} : {data}")
-
         if data["event_type"] == EVENT_TYPE_SCHEDULE and "schedule_id" in data:
             self._selected_schedule = getattr(
                 self.hass.data[DOMAIN][DATA_SCHEDULES][self.home.entity_id].get(

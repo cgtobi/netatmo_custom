@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 import logging
+from operator import itemgetter
+from time import time
 from typing import TYPE_CHECKING, Any, LiteralString
 
 from aiohttp import ClientConnectorError
@@ -23,8 +25,6 @@ if TYPE_CHECKING:
     from ..event import Event
     from ..home import Home
 
-from operator import itemgetter
-from time import time
 
 LOG = logging.getLogger(__name__)
 
